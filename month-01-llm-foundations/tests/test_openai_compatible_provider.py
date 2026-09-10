@@ -1,4 +1,5 @@
 import json
+from unittest.mock import AsyncMock, call
 
 import httpx
 import pytest
@@ -10,8 +11,11 @@ from baggage_extractor.providers import (
     ChatMessage,
     ChatRole,
     InvalidRequestError,
+    InvalidResponseError,
     ModelRequest,
     OpenAICompatibleProvider,
+    ProviderConnectionError,
+    ProviderTimeoutError,
     RateLimitError,
     ServerError,
 )
@@ -151,3 +155,87 @@ async def test_generate_retries_rate_limit_then_succeeds(settings: Settings) -> 
 
     assert response.content == "success"
     assert route.call_count == 2
+
+
+@pytest.mark.parametrize(
+    ("transport_error", "error_type"),
+    [
+        (httpx.ConnectTimeout, ProviderTimeoutError),
+        (httpx.ReadTimeout, ProviderTimeoutError),
+        (httpx.ConnectError, ProviderConnectionError),
+    ],
+)
+@respx.mock
+async def test_generate_bounds_transport_error_retries(
+    settings: Settings,
+    transport_error: type[httpx.RequestError],
+    error_type: type[Exception],
+) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        side_effect=transport_error("simulated failure")
+    )
+
+    with pytest.raises(error_type):
+        await OpenAICompatibleProvider(settings).generate(
+            ModelRequest(messages=(ChatMessage(role=ChatRole.USER, content="policy"),))
+        )
+
+    assert route.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not-json",
+        '{"model": "test-model", "choices": []}',
+        '{"model": "test-model", "choices": [{"message": {"content": " "}}]}',
+    ],
+)
+@respx.mock
+async def test_generate_does_not_retry_invalid_responses(settings: Settings, body: str) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, text=body)
+    )
+
+    with pytest.raises(InvalidResponseError):
+        await OpenAICompatibleProvider(settings).generate(
+            ModelRequest(messages=(ChatMessage(role=ChatRole.USER, content="policy"),))
+        )
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_generate_can_disable_retries(settings: Settings) -> None:
+    settings.model_max_retries = 0
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(429)
+    )
+
+    with pytest.raises(RateLimitError):
+        await OpenAICompatibleProvider(settings).generate(
+            ModelRequest(messages=(ChatMessage(role=ChatRole.USER, content="policy"),))
+        )
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_generate_uses_bounded_exponential_backoff(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.model_retry_backoff_seconds = 0.5
+    sleep = AsyncMock()
+    monkeypatch.setattr("baggage_extractor.providers.openai_compatible.asyncio.sleep", sleep)
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(429)
+    )
+
+    with pytest.raises(RateLimitError):
+        await OpenAICompatibleProvider(settings).generate(
+            ModelRequest(messages=(ChatMessage(role=ChatRole.USER, content="policy"),))
+        )
+
+    assert route.call_count == 3
+    assert sleep.await_args_list == [call(0.5), call(1.0)]
