@@ -107,11 +107,14 @@ PROMPT_VERSION = "baggage-extraction-v1"
 Prompt 至少要求：
 
 - 只依据输入文本。
-- 缺失字段返回 `null`，明确零额度才返回 `0`。
-- 成人、婴儿等不同条件拆成不同规则。
-- 无行李额度时返回 `rules: []`。
-- 超范围或歧义内容写入 `warnings`。
-- `source_text` 是直接支持对应规则的原文片段。
+- 严格输出航司信息、免费托运行李数组和随身行李数组。
+- 缺失的可空字段返回 `null`；`note` 和 `special_notes` 没有内容时返回空字符串。
+- 未提供舱位代码时返回 `fare_codes: []`。
+- 免费托运行李写入 `free_baggage_rules`，随身行李写入 `baggage_rules`。
+- 无对应政策时返回相应的空数组。
+- `pieces` 输出非负整数；明确以 cm 给出的长宽高输出非负整数。
+- 同时存在最小和最大尺寸时数值字段取最大尺寸，`note` 保留完整限制。
+- 公斤重量使用紧凑的 `kg` 表示，不进行跨单位数值换算。
 - 不输出 JSON 之外的解释。
 
 Prompt 不能替代 JSON Schema、权限或程序校验。
@@ -134,8 +137,7 @@ extract(text)
   3. 调用 ModelProvider
   4. 解析响应正文为 JSON
   5. 使用 ExtractionResult 校验
-  6. 检查每条 source_text 确实来自输入
-  7. 返回结构化结果
+  6. 返回结构化结果
 ```
 
 定义并区分：
@@ -144,8 +146,7 @@ extract(text)
 ExtractionError
 ├── InvalidExtractionInputError
 ├── StructuredOutputParseError
-├── StructuredOutputValidationError
-└── UnsupportedEvidenceError
+└── StructuredOutputValidationError
 ```
 
 具体命名可以按代码风格调整，但必须区分：
@@ -153,7 +154,6 @@ ExtractionError
 - 输入为空或超长。
 - 正文不是合法 JSON。
 - JSON 合法但不满足领域 Schema。
-- `source_text` 不是输入中的证据。
 - Provider 的认证、限流、连接和超时错误。
 
 Provider 异常继续保留原类型，不统一包装成模糊的“提取失败”。
@@ -178,17 +178,16 @@ Stub 应记录收到的 `ModelRequest`，便于断言 Prompt、Schema 和版本�
 至少覆盖：
 
 1. 单规则成功。
-2. 成人与婴儿拆成两条。
-3. 无关文本返回空规则列表。
-4. 缺少航司保留 `null`。
-5. 明确零额度保留 `0`。
+2. 免费托运行李和随身行李进入不同数组。
+3. 无关文本返回两个空规则列表。
+4. 缺少航司信息保留 `null`。
+5. 缺少舱位代码返回空数组。
 6. 非法 JSON 明确失败。
-7. 合法 JSON 中出现负数重量时明确失败。
-8. 未知枚举明确失败。
-9. `source_text` 不属于输入时明确失败。
-10. Provider 限流或超时异常不被吞掉。
-11. 请求包含正确 JSON Schema 和 Prompt 版本。
-12. 返回值不泄漏 Provider 或 HTTP 响应对象。
+7. 合法 JSON 中缺失必填键时明确失败。
+8. 空白文本字段明确失败。
+9. Provider 限流或超时异常不被吞掉。
+10. 请求包含正确 JSON Schema 和 Prompt 版本。
+11. 返回值不泄漏 Provider 或 HTTP 响应对象。
 
 空正文已由 Provider 拒绝；Extractor 测试可以使用异常 Stub 验证该错误会继续传播，不必重复模拟 HTTP 解析细节。
 
@@ -231,7 +230,7 @@ CLI 测试注入 Stub，不访问真实模型。
 1. 阅读[真实调用边界](../../docs/setup.md#可选真实模型调用)。
 2. 使用一段不含私人信息的合成中文政策。
 3. 确认所选服务支持当前结构化输出参数。
-4. 验证结果通过 Pydantic 和证据检查。
+4. 验证结果通过 Pydantic，并确认两类行李进入正确数组。
 5. 记录模型、Prompt、Schema 版本、延迟、Token/成本可用性和失败。
 
 没有账户或未获费用确认时跳过，并记录“真实模型未验证”。
@@ -272,7 +271,7 @@ macOS / Linux：
 
 - **Provider 直接返回 `ExtractionResult`：**会把通用模型边界与行李业务耦合。
 - **模型返回非法结果时返回空列表：**无法区分“无行李政策”和“提取失败”。
-- **只验证 JSON Schema：**仍需检查证据来自输入及其他业务约束。
+- **只验证 JSON Schema：**仍需通过 Pydantic 和固定评估集检查业务结果。
 - **静默删除结构化参数：**会让调用方误以为获得了严格输出保证。
 - **为了测试写真实 `.env`：**常规测试应注入 Settings、Stub 或 HTTP Mock。
 - **把一次冒烟成功写成准确率结论：**模型质量需要固定数据集和重复评估。
@@ -281,8 +280,8 @@ macOS / Linux：
 
 - [ ] 普通文本模式的既有测试保持通过。
 - [ ] 结构化请求通过供应商无关契约表达。
-- [ ] Extractor 明确区分输入、解析、领域和证据错误。
-- [ ] 成人与婴儿规则没有合并，缺失值与零额度没有混淆。
+- [ ] Extractor 明确区分输入、解析和领域错误。
+- [ ] 免费托运行李与随身行李没有混用，字段类型和空值规则符合最终 Schema。
 - [ ] Provider 错误类型能够传播。
 - [ ] API Key 用于真实认证，但不会进入日志或提交内容。
 - [ ] 新 CLI 与测试不修改实验入口职责。

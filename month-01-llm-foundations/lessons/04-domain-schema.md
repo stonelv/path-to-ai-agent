@@ -1,165 +1,152 @@
-# 第 4 课：领域 Schema 与确定性校验
+# 第 4 课：最终行李额 Schema 与确定性校验
 
 上一课：[异步与错误处理](./03-error-handling.md) · [课程索引](./README.md) · 下一课：[结构化提取闭环](./05-structured-extraction.md)
 
-> **状态：规划中。** 本课已有实施任务和验收标准，但仓库中尚无对应的领域模型、测试或参考实现。
-> 完成实现并通过发布检查后，才能将状态改为“可学习”。
+> **状态：可学习。** 本课已有领域模型、参考测试、Schema 文档和离线验收。
 
 ## 目标与前置
 
-建议 2～3 小时。需要完成第 3 课，理解 Pydantic `BaseModel`、枚举、可空字段和字段校验。
+建议 2～3 小时。需要完成第 3 课，并理解 Pydantic `BaseModel`、嵌套模型、列表、
+可空字段和字段校验。
 
 本课只处理确定性的领域建模，不调用真实模型。完成后应能：
 
-- 用 Pydantic 表达一条或多条行李规则。
-- 区分“未说明”“明确为零”和“没有可提取规则”。
-- 拒绝负数、未知枚举和没有额度的无效规则。
+- 用固定结构区分免费托运行李和随身行李规则。
+- 保留舱位说明、舱位代码、重量、件数、尺寸和特殊说明。
+- 区分 `null`、空数组和允许为空的说明字段。
 - 生成供下一课模型调用使用的 JSON Schema。
 
-## 为什么先做 Schema
+## 为什么先确定最终格式
 
-模型返回 JSON 不代表结果可供业务使用。在发起结构化模型请求前，需要先确定：
+模型返回 JSON 不代表结果可供业务使用。在发起结构化模型请求前，需要先固定：
 
-1. 业务允许哪些字段和值。
-2. 缺失信息如何表达。
-3. 哪些错误必须由程序拒绝。
-4. 同一文本中的不同适用条件如何拆分。
+1. 顶层必须包含哪些键。
+2. 免费托运行李和随身行李如何分开。
+3. 缺失字段如何表达。
+4. 哪些格式错误必须由程序拒绝。
 
-本课的测试全部针对普通 Python 对象，不依赖 Prompt、模型供应商或网络。
+本课测试只针对普通 Python 对象，不依赖 Prompt、模型供应商或网络。
 
-## 必做范围
-
-只支持：
-
-- 中文文本。
-- 托运行李。
-- 成人和婴儿。
-- 经济舱。
-- 件数、单件重量、总重量和三边之和。
-- 航司、始发地和目的地缺失时返回 `null`。
-- 一段文本产生零条、一条或多条规则。
-
-暂不支持：
-
-- 英文和单位换算。
-- 儿童、会员等级和票价品牌。
-- 多舱位复杂组合。
-- 手提行李和随身物品。
-- 模型自报置信度。
-
-超出范围的输入不能被静默解释成普通成功结果。下一课使用 `warnings` 明确报告暂不支持或无法可靠表达的信息。
-
-## 动手任务
-
-### 1. 创建文件
-
-新增：
-
-```text
-src/baggage_extractor/models.py
-tests/test_models.py
-docs/schema.md
-```
-
-`docs/schema.md` 记录字段含义、可空规则、示例和当前不支持范围，不复制整份自动生成的 JSON Schema。
-
-### 2. 定义最小领域模型
-
-建议层次：
+## 最终数据结构
 
 ```text
 ExtractionResult
-├── schema_version
-├── rules: list[BaggageRule]
-└── warnings: list[str]
+├── airline_code
+├── airline_name
+├── free_baggage_rules: list[FreeBaggageRule]
+└── baggage_rules: list[CarryOnBaggageRule]
 
 BaggageRule
-├── airline
-├── origin
-├── destination
 ├── cabin_class
-├── passenger_type
-├── baggage_type
-├── allowance
-├── conditions
-└── source_text
+├── fare_codes: list[str]
+├── checked_baggage
+├── pieces
+├── size_limit: SizeLimit
+└── special_notes
 
-BaggageAllowance
-├── piece_count
-├── weight_per_piece_kg
-├── total_weight_kg
-└── linear_dimensions_cm
+SizeLimit
+├── length
+├── width
+├── height
+└── note
 ```
 
-枚举先限制为当前范围：
+`free_baggage_rules` 表示免费托运行李，`baggage_rules` 表示随身行李。
+两类规则的 JSON 字段相同，但分别使用 `FreeBaggageRule` 和 `CarryOnBaggageRule`
+类型，防止业务代码混用。
 
-- `PassengerType.ADULT`
-- `PassengerType.INFANT`
-- `CabinClass.ECONOMY`
-- `BaggageType.CHECKED`
+目标格式要求随身行李规则也使用 `checked_baggage` 字段名。实现必须保留这个外部契约，
+不能因为名称看起来像托运行李就改名或改变其含义。
 
-不要为了未来需求提前加入大量枚举值。新增能力时再同步扩展 Schema、测试和评估数据。
-
-### 3. 明确字段语义
+## 字段语义
 
 | 表达 | 含义 |
 | --- | --- |
-| `null` | 原文没有说明该字段 |
-| `0` | 原文明示额度为零 |
-| `rules: []` | 文本中没有可提取的行李额度 |
-| `warnings` | 输入存在超范围、歧义或无法可靠表达的信息 |
-| `source_text` | 直接支持当前规则的最小原文证据 |
+| `null` | 输入没有说明该文本字段 |
+| `fare_codes: []` | 没有可提取的舱位代码 |
+| `free_baggage_rules: []` | 没有免费托运行李规则 |
+| `baggage_rules: []` | 没有随身行李规则 |
+| `note: ""` | 没有尺寸补充说明 |
+| `special_notes: ""` | 没有特殊说明 |
 
-`source_text` 不是整篇输入的机械复制。下一课还需验证它确实来自输入文本，防止模型生成不存在的证据。
+所有目标键必须存在。可空字段未说明时显式返回 `null`，不能省略。
+只有 `note` 和 `special_notes` 使用空字符串表达“没有说明”。
 
-数值必须支持非负约束。若需要表达小数重量，优先考虑 `Decimal`；选择具体类型后，在 `docs/schema.md` 说明序列化行为。
+重量保留为紧凑的 kg 字符串，件数和尺寸使用非负整数。例如：
 
-### 4. 添加确定性校验
+- `checked_baggage`: `"40kg"`
+- `pieces`: `2`
+- `length`: `55`
+- `note`: `"每件行李尺寸不超过55×40×20cm"`
 
-至少保证：
+原文同时给出最小和最大尺寸时，长宽高记录最大尺寸，`note` 保留完整限制。
 
-- 件数、重量和三边之和不能为负。
-- `source_text` 不能为空白字符串。
-- 每条规则至少有一个额度字段不为 `null`。
-- 未知枚举值校验失败。
-- 不用 `0` 自动替换缺失数据。
-- 空规则列表是合法结果。
+## 动手任务
 
-不要添加未经业务证实的约束，例如“计件制一定不能同时出现总重量”。
+### 1. 定义模型
 
-### 5. 编写测试
+阅读[领域模型](../src/baggage_extractor/models.py)，确认：
 
-在 `tests/test_models.py` 覆盖：
+- 所有模型使用 `extra="forbid"` 拒绝未知字段。
+- 件数和长宽高只接受非负整数或 `null`。
+- `note` 和 `special_notes` 接受空字符串。
+- `SizeLimit` 的四个键必填，三个尺寸值可以是 `null`，`note` 始终是字符串。
+- 两个规则数组都必填且允许为空。
+- 模型不读取配置，也不依赖 Provider 或网络。
 
-1. 合法的单件 23 kg 规则。
-2. 合法的总重量 20 kg 规则。
-3. 缺少航司时接受 `null`。
-4. 明确零额度时保留 `0`。
-5. 件数为负时失败。
-6. 重量为负时失败。
-7. 未知旅客类型时失败。
-8. 空白 `source_text` 时失败。
-9. 所有额度字段均为 `null` 时失败。
-10. 成人与婴儿两条规则可以同时存在。
-11. 无相关政策时接受空规则列表。
+### 2. 理解“必填但可空”
 
-断言具体字段和错误位置，不要只断言“抛出了某个异常”。
+下面两种输入不同：
 
-### 6. 生成并检查 JSON Schema
+```json
+{"airline_code": null}
+```
 
-使用 Pydantic 生成 `ExtractionResult` 的 JSON Schema，并用测试确认：
+表示键存在，但输入没有提供航司代码；省略 `airline_code` 则表示输出结构不完整，应校验失败。
 
-- Schema 可以序列化为 JSON。
-- 必填字段和可空字段符合设计。
-- 枚举只包含当前支持值。
-- 顶层允许多条规则和空规则列表。
-- Schema 不包含 `confidence`。
+同理，尺寸未知时仍需返回完整的 `size_limit`：
 
-JSON Schema 是下一课请求模型的契约，但模型服务接受该 Schema 后，程序仍需再次执行 Pydantic 校验。
+```json
+{
+  "length": null,
+  "width": null,
+  "height": null,
+  "note": ""
+}
+```
+
+### 3. 运行并阅读测试
+
+[模型测试](../tests/test_models.py)覆盖：
+
+1. 用户给出的东航完整免费托运行李和随身行李结果。
+2. 顶层、规则和尺寸键与目标格式完全一致。
+3. 两类规则解析为不同 Python 类型。
+4. 多规则和多舱位代码。
+5. 两类空规则列表。
+6. 未知值使用 `null`。
+7. 非法件数和尺寸失败。
+8. 空白航司字段失败。
+9. 空白舱位代码失败并报告准确位置。
+10. 缺失顶层键和未知字段失败。
+11. JSON Schema 的必填键、数组元素和整数约束。
+
+### 4. 检查 JSON Schema
+
+使用 `ExtractionResult.model_json_schema()` 生成契约，并确认：
+
+- Schema 可序列化为 JSON。
+- 顶层只有最终格式要求的四个字段。
+- 四个顶层字段全部必填。
+- 两个规则数组引用不同的规则类型。
+- `SizeLimit` 的四个键全部必填，三个尺寸字段是非负整数或 `null`。
+- 不再包含旧的 `schema_version`、`warnings` 或数值额度字段。
+
+JSON Schema 是下一课请求模型的结构契约，程序收到模型结果后仍需再次执行 Pydantic 校验。
 
 ## 运行与预期
 
-以下命令需在实现完成后运行。当前规划状态下，`tests/test_models.py` 尚不存在。
+在项目目录执行：
 
 Windows / PowerShell：
 
@@ -177,37 +164,22 @@ macOS / Linux：
 
 测试不需要 `.env`、API Key 或网络。
 
-<details>
-<summary>实现提示</summary>
-
-- 复用项目当前的 Pydantic 2，不增加新的建模依赖。
-- 可以用模型级校验器检查“至少存在一个额度字段”。
-- 注意 Python 中 `0` 是假值，不能用简单的 `any(values)` 判断字段是否存在；应判断字段是否为 `None`。
-- 领域模型不要读取配置，也不要依赖具体 Provider。
-- `schema_version` 用显式固定值，后续不兼容变更时再升级。
-
-</details>
-
 ## 常见问题
 
-- **把 `0` 当成缺失：**会丢失“明确没有免费额度”的业务含义。
-- **Schema 一次覆盖全部航司规则：**会让第一课领域建模变成长期需求分析，阻塞首个闭环。
-- **只验证 JSON 类型：**数值是整数不代表它允许为负，也不代表一条规则包含有效额度。
-- **在模型层检查证据是否属于输入：**领域模型本身不知道完整输入，这项校验应由下一课的提取服务执行。
+- **把 `baggage_rules` 当成托运行李：**本项目明确约定它表示随身行李。
+- **擅自重命名 `checked_baggage`：**这是目标外部契约的一部分，即使位于随身行李规则中也需保留。
+- **所有缺失值都使用 `null`：**`note` 和 `special_notes` 按目标格式使用空字符串。
+- **把重量转换成数字：**`checked_baggage` 需要保留 kg 单位和额度上下文。
+- **把件数输出为 `"2件"`：**目标字段是整数，应输出 `2`。
+- **省略未知尺寸键：**键必须存在，未知值填 `null`。
 
 ## 验收与交付
 
 - [ ] `models.py` 不依赖模型供应商或网络。
-- [ ] 所有正常、边界和失败测试通过。
-- [ ] 能解释 `null`、`0` 和空规则列表的区别。
-- [ ] 能解释 JSON Schema 校验与业务校验的区别。
-- [ ] `docs/schema.md` 记录当前范围和字段语义。
-- [ ] 完整 pytest 与 Ruff 没有因新增模型失败。
+- [ ] 输出键与最终目标格式一致。
+- [ ] 免费托运行李和随身行李不会混用。
+- [ ] 非法整数、缺失键、受约束空白文本和未知字段会校验失败。
+- [ ] `docs/schema.md` 记录字段语义和当前边界。
+- [ ] 完整 pytest 与 Ruff 没有因新模型失败。
 
-建议独立提交：
-
-```text
-Add baggage domain schema
-```
-
-完成本课后进入[第 5 课](./05-structured-extraction.md)，将 Schema 接入模型请求并实现提取服务。
+完成后进入[第 5 课](./05-structured-extraction.md)，将最终 Schema 接入模型请求并实现提取服务。

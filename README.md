@@ -8,12 +8,14 @@
 
 1. 阅读[入门导航](./docs/start-here.md)，确认前置知识和学习方式。
 2. 按[环境指南](./docs/setup.md)完成无 API Key 的离线验证。
-3. 进入[第 1～3 课](./month-01-llm-foundations/lessons/README.md)，先完成练习，再对照参考实现。
+3. 进入[第 1～4 课](./month-01-llm-foundations/lessons/README.md)，先完成练习，再对照参考实现。
 4. 用[验收指南](./docs/assessment.md)判断是否掌握，而不是仅勾选“读过”。
 
-**当前能运行什么？** 模型配置、异步文本调用、三组模型实验、计时、错误分类与有限重试，以及不访问真实模型的测试。
+**当前能运行什么？** 模型配置、异步文本调用、三组模型实验、计时、错误分类与有限重试、
+行李额领域 Schema 和不访问真实模型的测试。
 
-**当前还没有什么？** 行李额领域 Schema、结构化提取 API、RAG、Agent Loop、Docker 部署和模型质量评估器。计划中的目录树、接口和指标不是已交付功能。
+**当前还没有什么？** 结构化提取 API、RAG、Agent Loop、Docker 部署和模型质量评估器。
+计划中的目录树、接口和指标不是已交付功能。
 
 ## 适合谁
 
@@ -33,7 +35,7 @@
 | --- | --- | --- |
 | 00 | 环境与 Python 工程补课 | 起步指南可用：[环境配置](./docs/setup.md)、[第 1 课](./month-01-llm-foundations/lessons/01-project-setup.md) |
 | 01 | 可靠的 LLM 调用 | 第 2～3 课可学习：[课程索引](./month-01-llm-foundations/lessons/README.md)；流式调用等尚未实现 |
-| 02 | 结构化输出与评估 | 规划中：[第一月后续计划](./month-01-llm-foundations/README.md) |
+| 02 | 结构化输出与评估 | 领域 Schema 可学习；提取与评估仍在规划：[课程索引](./month-01-llm-foundations/lessons/README.md) |
 | 03 | 工具调用、单 Agent 与基础 MCP 接入 | 规划中 |
 | 04 | 上下文工程、RAG 与记忆 | 规划中 |
 | 05 | 状态与业务流程 | 规划中 |

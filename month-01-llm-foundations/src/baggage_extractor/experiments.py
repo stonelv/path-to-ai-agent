@@ -1,16 +1,17 @@
 from dataclasses import dataclass
 
-from baggage_extractor.providers import ChatMessage, ChatRole, ModelRequest
+from baggage_extractor.prompts import (
+    STRUCTURED_EXTRACTION_SYSTEM_PROMPT,
+    build_extraction_messages,
+)
+from baggage_extractor.providers import ModelRequest
 
 SOURCE_URL = (
     "https://webresource.airchina.com.cn/zh-CN/content/travel_info/"
     "preparing/luggage/check/tyxlgz/"
 )
 
-SYSTEM_PROMPT = (
-    "你是航司行李政策分析助手。只根据用户提供的原文提取信息，不要补充原文未说明的"
-    "内容。分别列出每条适用规则，并保留旅客类型、舱位、航线、会员条件、件数及重量。"
-)
+SYSTEM_PROMPT = STRUCTURED_EXTRACTION_SYSTEM_PROMPT
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,13 +24,7 @@ class ExperimentCase:
 
     def to_model_request(self) -> ModelRequest:
         return ModelRequest(
-            messages=(
-                ChatMessage(role=ChatRole.SYSTEM, content=SYSTEM_PROMPT),
-                ChatMessage(
-                    role=ChatRole.USER,
-                    content=f"请提取以下行李政策的关键信息：\n{self.policy_text}",
-                ),
-            ),
+            messages=build_extraction_messages(self.policy_text),
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
         )

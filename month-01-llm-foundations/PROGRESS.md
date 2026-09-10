@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 学习阶段：第 1 个月，第 3 天已完成
+- 学习阶段：第 1 个月，第 4 天已完成
 - 记录时间：2026-09-10
 - 月度项目：航司行李额结构化提取程序
 - Python 版本：3.13.1
@@ -75,13 +75,12 @@ Result: success
 
 ## 验证结果
 
-2026-09-09 从仓库根目录使用项目虚拟环境完成最新验证：
+2026-09-10 从仓库根目录使用项目虚拟环境完成最新离线验证：
 
 ```text
 Python: 3.13.1
-pytest: 10 passed
+pytest: 42 passed
 ruff check: All checks passed
-application: real model request succeeded
 ```
 
 使用的验证命令：
@@ -89,8 +88,9 @@ application: real model request succeeded
 ```powershell
 .\month-01-llm-foundations\.venv\Scripts\python.exe -m pytest .\month-01-llm-foundations
 .\month-01-llm-foundations\.venv\Scripts\python.exe -m ruff check .\month-01-llm-foundations
-.\month-01-llm-foundations\.venv\Scripts\python.exe -m baggage_extractor.main
 ```
+
+真实模型请求成功是 2026-09-09 的历史结果；第 4 天验收不调用真实服务。
 
 ## 当前项目结构
 
@@ -104,7 +104,8 @@ path-to-ai-agent/
     ├── README.md
     ├── docs/
     │   ├── day-02-model-experiments.md
-    │   └── day-03-error-handling.md
+    │   ├── day-03-error-handling.md
+    │   └── schema.md
     ├── pyproject.toml
     ├── src/
     │   └── baggage_extractor/
@@ -112,6 +113,7 @@ path-to-ai-agent/
     │       ├── config.py
     │       ├── experiments.py
     │       ├── main.py
+    │       ├── models.py
     │       ├── telemetry.py
     │       └── providers/
     │           ├── __init__.py
@@ -122,6 +124,7 @@ path-to-ai-agent/
         ├── __init__.py
         ├── test_config.py
         ├── test_experiments.py
+        ├── test_models.py
         ├── test_openai_compatible_provider.py
         ├── test_provider_base.py
         ├── test_telemetry.py
@@ -151,11 +154,22 @@ path-to-ai-agent/
 - 只对明确可重试的错误实施有限次数指数退避。
 - 使用 HTTP Mock 覆盖错误分类和重试路径，不访问真实模型服务。
 
-## 下一步：第 4 天
+### 第 4 天：领域 Schema 与确定性校验
 
-1. 定义行李额领域模型。
-2. 增加单位和非负数校验。
-3. 验证缺少字段、错误枚举和负数重量等场景。
+- 使用 Pydantic 定义航司、免费托运行李、随身行李和尺寸模型。
+- 使用不同 Python 类型区分结构相同的免费托运行李和随身行李规则。
+- 保留舱位代码和重量文本，件数及长宽高使用非负整数。
+- 区分原文未说明的 `null`、允许为空的说明、没有舱位代码的空数组和没有规则的空列表。
+- 拒绝非法整数、缺失键、未知字段和受约束字段中的空白文本。
+- 生成并测试供下一课结构化模型请求使用的 JSON Schema。
+- 新增版本化结构化提取提示词，并让现有实验请求复用。
+- 编写字段语义、序列化行为和当前范围文档。
+
+## 下一步：第 5 天
+
+1. 将 JSON Schema 接入模型请求契约。
+2. 实现结构化提取服务和模型输出校验。
+3. 验证免费托运行李与随身行李进入正确数组。
 
 ## 提交前检查
 
