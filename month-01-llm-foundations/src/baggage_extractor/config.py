@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     model_api_key: SecretStr
     model_name: str = Field(min_length=1)
     model_base_url: str = Field(min_length=1)
-    model_timeout_seconds: float = Field(default=30, gt=0)
+    model_connect_timeout_seconds: float = Field(default=10, gt=0)
+    model_read_timeout_seconds: float = Field(default=30, gt=0)
+    model_max_retries: int = Field(default=2, ge=0, le=5)
+    model_retry_backoff_seconds: float = Field(default=0.5, ge=0, le=30)
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(

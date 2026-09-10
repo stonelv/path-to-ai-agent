@@ -1,8 +1,20 @@
+import asyncio
+
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from baggage_extractor.config import Settings
 from baggage_extractor.providers.base import ModelRequest, ModelResponse
+from baggage_extractor.providers.errors import (
+    AuthenticationError,
+    InvalidRequestError,
+    InvalidResponseError,
+    ModelProviderError,
+    ProviderConnectionError,
+    ProviderTimeoutError,
+    RateLimitError,
+    ServerError,
+)
 
 
 class _ResponseMessage(BaseModel):
@@ -40,18 +52,55 @@ class OpenAICompatibleProvider:
             payload["max_tokens"] = request.max_output_tokens
 
         if self._client is not None:
-            response = await self._post(self._client, payload)
-        else:
-            async with httpx.AsyncClient(timeout=self._settings.model_timeout_seconds) as client:
-                response = await self._post(client, payload)
+            return await self._generate_with_client(self._client, payload)
 
-        response.raise_for_status()
-        completion = _ChatCompletionResponse.model_validate(response.json())
+        timeout = httpx.Timeout(
+            connect=self._settings.model_connect_timeout_seconds,
+            read=self._settings.model_read_timeout_seconds,
+            write=self._settings.model_read_timeout_seconds,
+            pool=self._settings.model_connect_timeout_seconds,
+        )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await self._generate_with_client(client, payload)
+
+    async def _generate_with_client(
+        self,
+        client: httpx.AsyncClient,
+        payload: dict[str, object],
+    ) -> ModelResponse:
+        for attempt in range(self._settings.model_max_retries + 1):
+            try:
+                response = await self._post(client, payload)
+                return self._parse_response(response)
+            except ModelProviderError as error:
+                if not error.retryable or attempt >= self._settings.model_max_retries:
+                    raise
+                delay = self._settings.model_retry_backoff_seconds * (2**attempt)
+                if delay:
+                    await asyncio.sleep(delay)
+
+        raise RuntimeError("Model request retry loop exited unexpectedly.")
+
+    def _parse_response(self, response: httpx.Response) -> ModelResponse:
+        status_code = response.status_code
+        if status_code in (401, 403):
+            raise AuthenticationError(f"Model authentication failed (HTTP {status_code}).")
+        if status_code == 429:
+            raise RateLimitError("Model provider rate limit exceeded.", retryable=True)
+        if status_code >= 500:
+            raise ServerError(f"Model provider server error (HTTP {status_code}).", retryable=True)
+        if status_code >= 400:
+            raise InvalidRequestError(f"Model request was rejected (HTTP {status_code}).")
+
+        try:
+            completion = _ChatCompletionResponse.model_validate(response.json())
+        except (ValueError, ValidationError) as error:
+            raise InvalidResponseError("Model response had an invalid format.") from error
         if not completion.choices:
-            raise ValueError("Model response did not contain any choices.")
+            raise InvalidResponseError("Model response did not contain any choices.")
         content = completion.choices[0].message.content
         if not content.strip():
-            raise ValueError("Model response contained empty content.")
+            raise InvalidResponseError("Model response contained empty content.")
 
         return ModelResponse(
             content=content,
@@ -64,13 +113,18 @@ class OpenAICompatibleProvider:
         client: httpx.AsyncClient,
         payload: dict[str, object],
     ) -> httpx.Response:
-        return await client.post(
-            f"{self._settings.model_base_url}/chat/completions",
-            headers={
-                "Authorization": (
-                    f"Bearer {self._settings.model_api_key.get_secret_value()}"
-                ),
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
+        try:
+            return await client.post(
+                f"{self._settings.model_base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._settings.model_api_key.get_secret_value()}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        except httpx.TimeoutException as error:
+            raise ProviderTimeoutError("Model request timed out.", retryable=True) from error
+        except httpx.ConnectError as error:
+            raise ProviderConnectionError(
+                "Could not connect to the model provider.", retryable=True
+            ) from error

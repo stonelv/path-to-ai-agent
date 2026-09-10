@@ -7,6 +7,16 @@ from baggage_extractor.providers.base import (
     ModelRequest,
     ModelResponse,
 )
+from baggage_extractor.providers.errors import (
+    AuthenticationError,
+    InvalidRequestError,
+    InvalidResponseError,
+    ModelProviderError,
+    ProviderConnectionError,
+    ProviderTimeoutError,
+    RateLimitError,
+    ServerError,
+)
 from baggage_extractor.providers.openai_compatible import OpenAICompatibleProvider
 
 __all__ = [
@@ -16,4 +26,12 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "OpenAICompatibleProvider",
+    "AuthenticationError",
+    "InvalidRequestError",
+    "InvalidResponseError",
+    "ModelProviderError",
+    "ProviderConnectionError",
+    "ProviderTimeoutError",
+    "RateLimitError",
+    "ServerError",
 ]
