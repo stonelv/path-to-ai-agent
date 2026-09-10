@@ -6,6 +6,7 @@ from baggage_extractor.providers.base import (
     ModelProvider,
     ModelRequest,
     ModelResponse,
+    StructuredOutputSpec,
 )
 from baggage_extractor.providers.errors import (
     AuthenticationError,
@@ -25,6 +26,7 @@ __all__ = [
     "ModelProvider",
     "ModelRequest",
     "ModelResponse",
+    "StructuredOutputSpec",
     "OpenAICompatibleProvider",
     "AuthenticationError",
     "InvalidRequestError",

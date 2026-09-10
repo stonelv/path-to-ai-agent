@@ -4,6 +4,7 @@ from baggage_extractor.providers import (
     ModelProvider,
     ModelRequest,
     ModelResponse,
+    StructuredOutputSpec,
 )
 
 
@@ -37,3 +38,29 @@ async def test_provider_protocol_accepts_structural_implementation() -> None:
     assert response.content == request.messages[0].content
     assert response.model == "stub-model"
     assert response.request_id == "stub-request-id"
+
+
+def test_model_request_keeps_structured_output_optional() -> None:
+    request = ModelRequest(messages=(ChatMessage(role=ChatRole.USER, content="policy"),))
+
+    assert request.structured_output is None
+
+
+def test_structured_output_spec_is_provider_independent() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"airline_code": {"type": ["string", "null"]}},
+        "required": ["airline_code"],
+        "additionalProperties": False,
+    }
+
+    spec = StructuredOutputSpec(
+        name="baggage_extraction",
+        description="Structured airline baggage policy extraction.",
+        json_schema=schema,
+    )
+
+    assert spec.name == "baggage_extraction"
+    assert spec.description == "Structured airline baggage policy extraction."
+    assert spec.json_schema == schema
+    assert spec.strict is True

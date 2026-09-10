@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 学习阶段：第 1 个月，第 4 天已完成
+- 学习阶段：第 1 个月，第 5 天已完成
 - 记录时间：2026-09-10
 - 月度项目：航司行李额结构化提取程序
 - Python 版本：3.13.1
@@ -79,7 +79,7 @@ Result: success
 
 ```text
 Python: 3.13.1
-pytest: 42 passed
+pytest: 62 passed
 ruff check: All checks passed
 ```
 
@@ -90,7 +90,7 @@ ruff check: All checks passed
 .\month-01-llm-foundations\.venv\Scripts\python.exe -m ruff check .\month-01-llm-foundations
 ```
 
-真实模型请求成功是 2026-09-09 的历史结果；第 4 天验收不调用真实服务。
+真实文本模型请求成功是 2026-09-09 的历史结果；第 5 天结构化输出验收未调用真实服务。
 
 ## 当前项目结构
 
@@ -111,7 +111,10 @@ path-to-ai-agent/
     │   └── baggage_extractor/
     │       ├── __init__.py
     │       ├── config.py
+    │       ├── errors.py
     │       ├── experiments.py
+    │       ├── extract_cli.py
+    │       ├── extractor.py
     │       ├── main.py
     │       ├── models.py
     │       ├── telemetry.py
@@ -124,11 +127,14 @@ path-to-ai-agent/
         ├── __init__.py
         ├── test_config.py
         ├── test_experiments.py
+        ├── test_extract_cli.py
+        ├── test_extractor.py
         ├── test_models.py
         ├── test_openai_compatible_provider.py
+        ├── test_package.py
+        ├── test_prompts.py
         ├── test_provider_base.py
-        ├── test_telemetry.py
-        └── test_package.py
+        └── test_telemetry.py
 ```
 
 ## 已掌握的知识点
@@ -165,11 +171,22 @@ path-to-ai-agent/
 - 新增版本化结构化提取提示词，并让现有实验请求复用。
 - 编写字段语义、序列化行为和当前范围文档。
 
-## 下一步：第 5 天
+### 第 5 天：结构化提取闭环
 
-1. 将 JSON Schema 接入模型请求契约。
-2. 实现结构化提取服务和模型输出校验。
-3. 验证免费托运行李与随身行李进入正确数组。
+- 新增供应商无关的 `StructuredOutputSpec`，并保持普通文本请求兼容。
+- 将领域 JSON Schema 映射为 OpenAI 兼容的严格 `response_format`。
+- 确认真实 API Key 仅在发送认证头时显式读取，不使用掩码代替认证值。
+- 实现 `BaggageExtractor`，区分空白或超长输入、非法 JSON 和领域 Schema 校验失败。
+- 保留 Provider 的认证、限流、连接和超时异常类型，不包装成模糊的提取错误。
+- 使用 Stub 验证免费托运行李和随身行李进入不同的领域类型与数组。
+- 新增独立提取 CLI，成功时输出格式化 JSON，失败时写入标准错误并返回非零退出码。
+- 使用 HTTP Mock 和 Stub 完成离线验收；真实结构化模型兼容性尚未验证。
+
+## 下一步：第 6 天
+
+1. 建立小型固定评估集和字段级评分。
+2. 记录 Prompt、Schema、模型和评估结果版本。
+3. 在评估基线稳定后实现 FastAPI 服务。
 
 ## 提交前检查
 

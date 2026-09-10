@@ -18,6 +18,7 @@ from baggage_extractor.providers import (
     ProviderTimeoutError,
     RateLimitError,
     ServerError,
+    StructuredOutputSpec,
 )
 
 
@@ -80,6 +81,65 @@ async def test_generate_sends_request_and_parses_response(settings: Settings) ->
     assert response.content == "可免费托运一件，每件不超过23公斤。"
     assert response.model == "test-model-2026-09"
     assert response.request_id == "request-123"
+
+
+@respx.mock
+async def test_generate_sends_strict_json_schema_response_format(settings: Settings) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"model": "test-model", "choices": [{"message": {"content": "{}"}}]},
+        )
+    )
+    schema = {
+        "type": "object",
+        "properties": {"airline_code": {"type": ["string", "null"]}},
+        "required": ["airline_code"],
+        "additionalProperties": False,
+    }
+    request = ModelRequest(
+        messages=(ChatMessage(role=ChatRole.USER, content="policy"),),
+        structured_output=StructuredOutputSpec(
+            name="baggage_extraction",
+            description="Structured airline baggage policy extraction.",
+            json_schema=schema,
+        ),
+    )
+
+    await OpenAICompatibleProvider(settings).generate(request)
+
+    payload = json.loads(route.calls.last.request.content)
+    assert payload["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "baggage_extraction",
+            "description": "Structured airline baggage policy extraction.",
+            "schema": schema,
+            "strict": True,
+        },
+    }
+
+
+@respx.mock
+async def test_generate_does_not_retry_rejected_structured_output(
+    settings: Settings,
+) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(400)
+    )
+    request = ModelRequest(
+        messages=(ChatMessage(role=ChatRole.USER, content="policy"),),
+        structured_output=StructuredOutputSpec(
+            name="baggage_extraction",
+            description="Structured airline baggage policy extraction.",
+            json_schema={"type": "object"},
+        ),
+    )
+
+    with pytest.raises(InvalidRequestError, match=r"rejected \(HTTP 400\)"):
+        await OpenAICompatibleProvider(settings).generate(request)
+
+    assert route.call_count == 1
 
 
 @respx.mock

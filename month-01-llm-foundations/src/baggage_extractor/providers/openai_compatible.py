@@ -50,6 +50,16 @@ class OpenAICompatibleProvider:
         }
         if request.max_output_tokens is not None:
             payload["max_tokens"] = request.max_output_tokens
+        if request.structured_output is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": request.structured_output.name,
+                    "description": request.structured_output.description,
+                    "schema": dict(request.structured_output.json_schema),
+                    "strict": request.structured_output.strict,
+                },
+            }
 
         if self._client is not None:
             return await self._generate_with_client(self._client, payload)

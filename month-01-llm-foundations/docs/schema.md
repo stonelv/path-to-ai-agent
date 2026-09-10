@@ -124,5 +124,5 @@
 - 同时存在最小和最大尺寸时选择最大尺寸，并在 `note` 保留完整限制。
 - 没有 `note` 或 `special_notes` 时输出空字符串。
 
-提示词不能替代 JSON Schema 和 Pydantic 校验。当前实验请求会复用该提示词，但严格的
-Structured Output Provider 请求仍在第 5 课实现。
+提示词不能替代 JSON Schema 和 Pydantic 校验。结构化提取器会将本 Schema 作为严格的
+Structured Output 请求发送，并在收到 JSON 正文后再次执行 Pydantic 校验。
