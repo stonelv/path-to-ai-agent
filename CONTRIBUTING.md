@@ -57,6 +57,7 @@ git diff --check
 | [项目说明](./month-01-llm-foundations/README.md) | 项目范围、架构、里程碑与覆盖矩阵 | 另一份完整字段表或每日流水账 |
 | [课程](./month-01-llm-foundations/lessons/README.md) | 学习目标、变式任务、针对性命令和排错 | 替学习者勾选验收结果 |
 | [领域契约](./month-01-llm-foundations/docs/schema.md) | 字段语义、示例和校验边界 | 手工复制生成的 JSON Schema |
+| [评估数据](./month-01-llm-foundations/evals/README.md) | 数据版本、来源、划分和修改规则 | 伪造或挑选的模型质量基线 |
 | [作者日志](./month-01-llm-foundations/PROGRESS.md)、[年度旧计划](./docs/annual-plan.md) | 带日期的历史记录 | 当前发布状态或新学习者进度 |
 
 - 增加课程：同步首页状态、课程索引、入门导航和验收入口；不要只更新作者日志。

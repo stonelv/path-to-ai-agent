@@ -21,6 +21,9 @@ dist/
 .coverage
 htmlcov/
 
+# Local real-model evaluation output
+evals/runs/
+
 # IDE and OS
 .vscode/
 .idea/

@@ -1,4 +1,5 @@
 import asyncio
+from types import TracebackType
 
 import httpx
 from pydantic import BaseModel
@@ -40,6 +41,24 @@ class OpenAICompatibleProvider:
     ) -> None:
         self._settings = settings
         self._client = client
+        self._owns_client = False
+
+    async def __aenter__(self) -> "OpenAICompatibleProvider":
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._build_timeout())
+            self._owns_client = True
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self._owns_client and self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            self._owns_client = False
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
         payload: dict[str, object] = {
@@ -66,14 +85,16 @@ class OpenAICompatibleProvider:
         if self._client is not None:
             return await self._generate_with_client(self._client, payload)
 
-        timeout = httpx.Timeout(
+        async with httpx.AsyncClient(timeout=self._build_timeout()) as client:
+            return await self._generate_with_client(client, payload)
+
+    def _build_timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(
             connect=self._settings.model_connect_timeout_seconds,
             read=self._settings.model_read_timeout_seconds,
             write=self._settings.model_read_timeout_seconds,
             pool=self._settings.model_connect_timeout_seconds,
         )
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            return await self._generate_with_client(client, payload)
 
     async def _generate_with_client(
         self,

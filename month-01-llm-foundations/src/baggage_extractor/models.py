@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 NonBlankText = Annotated[str, Field(min_length=1, pattern=r".*\S.*")]
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0)]
+DOMAIN_SCHEMA_VERSION = "baggage-result-v1"
 
 
 class SizeLimit(BaseModel):

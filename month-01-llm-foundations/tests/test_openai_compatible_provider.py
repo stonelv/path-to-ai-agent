@@ -394,3 +394,27 @@ async def test_generate_does_not_retry_local_protocol_errors(settings: Settings)
         await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
 
     assert route.call_count == 1
+
+
+async def test_provider_context_reuses_and_closes_owned_client(settings: Settings) -> None:
+    request_count = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(
+            200,
+            json={"model": "test-model", "choices": [{"message": {"content": "done"}}]},
+        )
+
+    provider = OpenAICompatibleProvider(settings)
+    async with provider:
+        client = provider._client
+        assert client is not None
+        client._transport = httpx.MockTransport(handler)
+        await provider.generate(ModelRequest(messages=()))
+        await provider.generate(ModelRequest(messages=()))
+
+    assert request_count == 2
+    assert client.is_closed
+    assert provider._client is None

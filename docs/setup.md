@@ -50,23 +50,25 @@ python3.13 -m venv .venv
 - 依赖安装可能需要网络，“离线”指测试执行不调用真实模型，并非首次安装可完全断网完成。
 
 这些结果证明当前参考程序的已测行为，不证明模型提取准确率、供应商可用性或部署能力。
-不要执行文本实验或提取 CLI 来做离线验证：两者默认都会调用真实模型。
+不要执行文本实验、提取 CLI 或评估 `run` 子命令来做离线验证：它们都会调用真实模型。
+评估 `score` 子命令只读取本地数据与预测，可以离线执行。
 每次提交报告实际命令与结果，不把[历史验证记录](../month-01-llm-foundations/PROGRESS.md)的测试数量当作当前基准。
 
 ## 可选：真实模型调用
 
 ### 先确认边界
 
-当前有两个独立入口，均不是 HTTP API 服务：
+当前有三个真实模型入口，均不是 HTTP API 服务：
 
 | 入口 | 发出的内容 | 默认最大 HTTP 尝试数 | 输出 |
 | --- | --- | --- | --- |
 | `baggage_extractor.main` | 三组[实验文本](../month-01-llm-foundations/src/baggage_extractor/experiments.py) | 整轮 9 次 | 未经领域校验的文本与调用元信息 |
 | `baggage_extractor.extract_cli` | 位置参数中的单段政策 | 每次执行 3 次 | 通过领域 Schema 的 JSON |
+| `baggage_extractor.evaluation.cli run` | 指定固定数据文件的全部案例 | 案例数 × 3 | 保存逐案例预测和汇总质量报告 |
 
 运行前确认可以将文本发送给你选择的服务；不要使用公司内部或含个人信息的原文。
 默认 `MODEL_MAX_RETRIES=2`，表示首次请求之外最多重试 2 次；不可重试错误或重试耗尽会提前终止。
-文本实验的输出上限分别为 1000、1500、2500 Token；提取 CLI 当前未指定输出 Token 上限，使用供应商默认值。
+文本实验的输出上限分别为 1000、1500、2500 Token；提取 CLI 和固定评估当前未指定输出 Token 上限，使用供应商默认值。
 这些设置不是实际用量或总费用上限。
 当前程序没有自动费用熔断，也未采集 Token 用量；先在供应商侧设置预算或额度限制，费用以供应商计费规则为准。
 
@@ -153,6 +155,35 @@ macOS / Linux：
 输入、解析、领域和 Provider 错误写入 stderr，不返回伪造的空规则。
 提取 CLI 当前不输出计时、Token 或费用，不要把文本实验的元信息能力算在它上面。
 
+### 真实模型固定评估
+
+先完成[第 6 课](../month-01-llm-foundations/lessons/06-fixed-evaluation.md)的离线评分练习，
+再决定是否运行真实模型。运行器要求显式确认最坏 HTTP 请求数：
+
+```text
+案例数 × (MODEL_MAX_RETRIES + 1)
+```
+
+默认留出集有 6 条案例、默认重试 2 次，因此最多 18 次：
+
+```powershell
+.\.venv\Scripts\python.exe -m baggage_extractor.evaluation.cli run `
+  --dataset evals\datasets\v1\holdout.jsonl `
+  --predictions-output evals\runs\candidate-predictions.jsonl `
+  --report-output evals\runs\candidate-report.json `
+  --confirm-max-requests 18
+```
+
+macOS / Linux 使用相同参数和 `/` 路径分隔符。配置或数据数量变化后重新计算确认值。
+输出路径在任何请求前检查，默认不覆盖已有文件；需要替换时显式增加 `--overwrite`。
+本地 `evals/runs/` 被 Git 忽略，防止未经审查的模型输出和错误信息误提交。
+
+已知的 Provider、JSON 和领域错误会保存为失败预测并继续下一案例，不能从报告分母中删除。
+报告包含模型配置名称、Prompt、领域 Schema、包版本、最大重试配置、逐案例和平均延迟；
+延迟包含 Provider 内部重试。
+当前不采集 Token、费用、请求 ID、实际响应模型或重试次数，这些指标应标为“未采集”，不能填 0。
+运行前在供应商侧设置预算，结束后人工检查全部失败和成功抽样，再决定是否保存为基线。
+
 ## 常见问题
 
 | 现象 | 排查方式 |
@@ -167,6 +198,8 @@ macOS / Linux：
 | HTTP 200 但空正文 | 核对模型行为和输出上限；部分推理模型会消耗预算但没有最终正文，不应视为成功 |
 | `did not finish normally` | 检查结束原因和输出上限；截断不会自动重试，不把不完整结果当作成功 |
 | JSON / 领域校验失败 | 检查重复键、非标准数值、缺键及类型；不从 Markdown 中猜测 JSON，不静默修复 |
+| 评估确认值不匹配 | 用当前案例数乘以最大尝试次数；不要为了绕过检查随意填写 |
+| 评估拒绝输出路径 | 使用新的候选文件名，或确认确需替换后显式加 `--overwrite` |
 | 长时间没有输出 | 当前入口先完成全部案例再打印；结合超时和重试判断，避免反复启动产生额外费用 |
 
 提交问题时附操作系统、Python 版本、失败命令、脱敏异常和相关依赖版本；不要附完整 `.env`、授权头或敏感模型响应。

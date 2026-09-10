@@ -2,6 +2,7 @@
 
 本文件是[领域模型](../src/baggage_extractor/models.py)的字段语义与提取约定入口。自动生成的 JSON Schema
 由 `ExtractionResult.model_json_schema()` 提供，不在这里保存副本，以免文档与代码漂移。
+当前领域契约版本为 `baggage-result-v1`，真实评估报告会与 Prompt、数据和包版本一同记录它。
 
 ## 顶层结构
 
