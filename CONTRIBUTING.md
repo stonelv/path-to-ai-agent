@@ -35,8 +35,10 @@ git diff --check
 ## 课程与数据
 
 - 课程采用[课程模板](./templates/lesson.md)，包含动手任务、预期行为、参考实现和失败路径。
+- 区分必做与进阶，不把某个资深 JD 的全部技术项设为通用前置；岗位与趋势资料按[课程依据](./docs/curriculum-sources.md)记录来源、日期与限制。
 - 课程状态只在满足[发布门槛](./docs/assessment.md#课程发布门槛)后更新。
 - 模型实验采用[实验报告模板](./templates/experiment-report.md)，固定比较条件并保留失败样例。
+- Agent 课程验证工具约束与业务终态；项目提供[交付报告](./templates/project-report.md)和[AI 协作证据](./docs/coding-agent-workflow.md)。
 - 优先使用自己编写的合成资料。公开网页不等于可任意复制；第三方数据注明来源、访问日期及允许使用的依据。
 - 不提交真实旅客、客户、公司内部资料、API Key、授权头、完整 `.env` 或含凭据的截图。
 - 不提交 `.venv`、缓存、日志、构建产物和个人学习流水账；个人进度在自己的 Fork 中维护。
