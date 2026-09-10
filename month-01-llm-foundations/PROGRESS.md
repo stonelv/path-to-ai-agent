@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-- 学习阶段：第 1 个月，第 2 天进行中（首次模型调用已完成）
-- 记录时间：2026-09-09
+- 学习阶段：第 1 个月，第 2 天已完成
+- 记录时间：2026-09-10
 - 月度项目：航司行李额结构化提取程序
 - Python 版本：3.13.1
 
@@ -43,6 +43,9 @@
 - 记录请求开始时间、结束时间、总延迟、实际模型名称和可选请求 ID。
 - 将命令行入口连接到真实模型，完成首次端到端调用。
 - 使用 respx 和 Stub Provider 测试配置、请求格式、响应解析与计时逻辑，常规测试不访问真实 API。
+- 从国航公开页面及其免费托运行李额附件整理简单、多规则和复杂会员条件三组实验文本。
+- 使用三档 Temperature 和最大输出 Token 运行真实模型实验并保存输出、延迟和结论。
+- 增加模型空正文校验，避免将 HTTP 200 但无最终回答的响应视为成功。
 
 首次真实调用结果：
 
@@ -72,7 +75,7 @@ Result: success
 
 ```text
 Python: 3.13.1
-pytest: 7 passed
+pytest: 10 passed
 ruff check: All checks passed
 application: real model request succeeded
 ```
@@ -95,11 +98,14 @@ path-to-ai-agent/
     ├── .venv/                  # 仅保存在本地，不提交
     ├── PROGRESS.md
     ├── README.md
+    ├── docs/
+    │   └── day-02-model-experiments.md
     ├── pyproject.toml
     ├── src/
     │   └── baggage_extractor/
     │       ├── __init__.py
     │       ├── config.py
+    │       ├── experiments.py
     │       ├── main.py
     │       ├── telemetry.py
     │       └── providers/
@@ -109,6 +115,7 @@ path-to-ai-agent/
     └── tests/
         ├── __init__.py
         ├── test_config.py
+        ├── test_experiments.py
         ├── test_openai_compatible_provider.py
         ├── test_provider_base.py
         ├── test_telemetry.py
@@ -128,13 +135,15 @@ path-to-ai-agent/
 - 外部模型响应属于不可信输入，需要进行结构校验和空结果检查。
 - `perf_counter()` 适合计算耗时，UTC 时间适合跨环境记录事件时间。
 - 常规单元测试应使用 Stub 或 HTTP Mock，不应消耗真实模型额度。
+- 推理模型可能把 `max_tokens` 同时用于内部推理和最终正文，过低上限可能产生空正文。
+- HTTP 200 只说明传输成功，应用仍需验证响应结构和正文是否有效。
 
-## 第 2 天剩余任务
+## 下一步：第 3 天
 
-1. 准备三段具有不同复杂度的航司行李政策文本。
-2. 比较不同 Temperature 和最大输出长度下的结果。
-3. 保存三组实验输出并总结完整性、稳定性和延迟差异。
-4. 完成 Day 2 复盘，然后进入 Day 3 的超时、错误分类与有限重试。
+1. 分别配置连接超时和读取超时。
+2. 区分认证失败、限流、超时、服务端错误和无效请求。
+3. 只对明确可重试的错误实施有限次数重试。
+4. 使用 HTTP Mock 覆盖每种错误，不让自动化测试访问真实模型服务。
 
 ## 提交前检查
 

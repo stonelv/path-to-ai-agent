@@ -87,3 +87,23 @@ async def test_generate_rejects_response_without_choices(settings: Settings) -> 
                 messages=(ChatMessage(role=ChatRole.USER, content="policy"),),
             )
         )
+
+
+@respx.mock
+async def test_generate_rejects_empty_content(settings: Settings) -> None:
+    respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "model": "test-model",
+                "choices": [{"message": {"content": ""}}],
+            },
+        )
+    )
+
+    with pytest.raises(ValueError, match="empty content"):
+        await OpenAICompatibleProvider(settings).generate(
+            ModelRequest(
+                messages=(ChatMessage(role=ChatRole.USER, content="policy"),),
+            )
+        )

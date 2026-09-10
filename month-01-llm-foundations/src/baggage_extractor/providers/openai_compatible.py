@@ -49,9 +49,12 @@ class OpenAICompatibleProvider:
         completion = _ChatCompletionResponse.model_validate(response.json())
         if not completion.choices:
             raise ValueError("Model response did not contain any choices.")
+        content = completion.choices[0].message.content
+        if not content.strip():
+            raise ValueError("Model response contained empty content.")
 
         return ModelResponse(
-            content=completion.choices[0].message.content,
+            content=content,
             model=completion.model,
             request_id=response.headers.get("x-request-id"),
         )
