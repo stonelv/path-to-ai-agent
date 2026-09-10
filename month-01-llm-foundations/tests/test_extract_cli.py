@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from baggage_extractor.config import Settings
 from baggage_extractor.extract_cli import main
 from baggage_extractor.providers import ModelRequest, ModelResponse, RateLimitError
 
@@ -63,3 +64,44 @@ def test_main_preserves_provider_error_without_printing_credentials(
     assert captured.out == ""
     assert "rate limited" in captured.err
     assert "API" not in captured.err
+
+
+def test_main_reports_invalid_configuration_without_input_values(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def invalid_settings() -> Settings:
+        return Settings(
+            model_api_key="test-secret",
+            model_name="test-model",
+            model_base_url="https://models.example.com?key=test-secret",
+            _env_file=None,
+        )
+
+    monkeypatch.setattr("baggage_extractor.extract_cli.get_settings", invalid_settings)
+    monkeypatch.setattr(
+        "baggage_extractor.extract_cli.OpenAICompatibleProvider", lambda settings: StubProvider()
+    )
+
+    assert main(["policy"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Invalid model configuration" in captured.err
+    assert "model_base_url" in captured.err
+    assert "test-secret" not in captured.err
+
+
+def test_main_keeps_explicit_provider_even_if_falsey(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FalseyProvider(StubProvider):
+        def __bool__(self) -> bool:
+            return False
+
+    def unexpected_settings() -> Settings:
+        raise AssertionError("An injected provider must not load settings.")
+
+    monkeypatch.setattr("baggage_extractor.extract_cli.get_settings", unexpected_settings)
+
+    assert main(["policy"], provider=FalseyProvider()) == 0
+    assert capsys.readouterr().err == ""

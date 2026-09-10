@@ -45,28 +45,29 @@ python3.13 -m venv .venv
 
 - pytest 退出码为 0，所有测试通过；测试数量会随课程更新，不把固定数量作为验收条件。
 - Ruff 输出 `All checks passed!`。
-- 不需要 `.env` 或真实 API Key。配置测试显式禁用 `.env` 读取；HTTP 测试使用 respx，其他调用使用 Stub。
+- 不需要 `.env` 或真实 API Key。测试 fixture 临时隔离进程内的 `MODEL_*` 和 `LOG_LEVEL` 环境变量，
+  配置测试显式禁用 `.env` 读取；HTTP 测试使用 respx，其他调用使用 Stub。测试后恢复环境，不改磁盘配置。
 - 依赖安装可能需要网络，“离线”指测试执行不调用真实模型，并非首次安装可完全断网完成。
 
 这些结果证明当前参考程序的已测行为，不证明模型提取准确率、供应商可用性或部署能力。
-不要执行 `python -m baggage_extractor.main` 来做离线验证：它是真实模型入口。
-
-### 维护验证记录
-
-2026-09-10：在 Windows / Python 3.13.1 的已有项目虚拟环境中，清除验证进程内的 `MODEL_*` 环境变量后，
-运行本页的 pytest 与 Ruff 命令，结果为 **23 个测试通过**、**Ruff 通过**。
-本轮未新建环境重新安装依赖，未实机验证 macOS/Linux，也未执行真实模型请求。
-此记录是该版本的验证证据；后续测试数量变化不影响上面的验收规则。
+不要执行文本实验或提取 CLI 来做离线验证：两者默认都会调用真实模型。
+每次提交报告实际命令与结果，不把[历史验证记录](../month-01-llm-foundations/PROGRESS.md)的测试数量当作当前基准。
 
 ## 可选：真实模型调用
 
 ### 先确认边界
 
-当前入口会依次发送三组[实验文本](../month-01-llm-foundations/src/baggage_extractor/experiments.py)，不是交互式聊天，也不是结构化提取 API。
-运行前确认可以将这些文本发送给你选择的服务；不要换成公司内部或含个人信息的原文。
+当前有两个独立入口，均不是 HTTP API 服务：
 
-默认 `MODEL_MAX_RETRIES=2`：每个案例最多尝试 3 次，整轮最多 9 次 HTTP 请求；不可重试错误或重试耗尽会提前终止整轮。
-三组配置的输出上限分别为 1000、1500、2500 Token，它们不是实际用量或总费用上限。
+| 入口 | 发出的内容 | 默认最大 HTTP 尝试数 | 输出 |
+| --- | --- | --- | --- |
+| `baggage_extractor.main` | 三组[实验文本](../month-01-llm-foundations/src/baggage_extractor/experiments.py) | 整轮 9 次 | 未经领域校验的文本与调用元信息 |
+| `baggage_extractor.extract_cli` | 位置参数中的单段政策 | 每次执行 3 次 | 通过领域 Schema 的 JSON |
+
+运行前确认可以将文本发送给你选择的服务；不要使用公司内部或含个人信息的原文。
+默认 `MODEL_MAX_RETRIES=2`，表示首次请求之外最多重试 2 次；不可重试错误或重试耗尽会提前终止。
+文本实验的输出上限分别为 1000、1500、2500 Token；提取 CLI 当前未指定输出 Token 上限，使用供应商默认值。
+这些设置不是实际用量或总费用上限。
 当前程序没有自动费用熔断，也未采集 Token 用量；先在供应商侧设置预算或额度限制，费用以供应商计费规则为准。
 
 ### 配置
@@ -89,11 +90,11 @@ test -e .env || cp .env.example .env
 
 | 变量 | 要求 |
 | --- | --- |
-| `MODEL_API_KEY` | 自己账户的有效密钥；不要粘贴到 issue、截图或提交中 |
-| `MODEL_NAME` | 供应商实际提供的模型名称，不照抄作者历史记录 |
-| `MODEL_BASE_URL` | Chat Completions 的基础 URL，程序会追加 `/chat/completions`；如服务要求 `/v1`，需在此包含它 |
-| `MODEL_CONNECT_TIMEOUT_SECONDS` | 连接超时，必须大于 0，默认 10 秒 |
-| `MODEL_READ_TIMEOUT_SECONDS` | 读取超时，必须大于 0，默认 30 秒 |
+| `MODEL_API_KEY` | 自己账户的非空白有效密钥；不要粘贴到 issue、截图或提交中 |
+| `MODEL_NAME` | 非空白的真实模型名称，不照抄作者历史记录 |
+| `MODEL_BASE_URL` | HTTP(S) 基础 URL，不能含查询参数、片段或账号密码；程序追加 `/chat/completions`，服务要求 `/v1` 时需包含它 |
+| `MODEL_CONNECT_TIMEOUT_SECONDS` | 连接超时，必须是大于 0 的有限数值，默认 10 秒 |
+| `MODEL_READ_TIMEOUT_SECONDS` | 读取超时，必须是大于 0 的有限数值，默认 30 秒 |
 | `MODEL_MAX_RETRIES` | 首次请求之外的重试次数，0～5，默认 2 |
 | `MODEL_RETRY_BACKOFF_SECONDS` | 首次退避时间，0～30 秒，默认 0.5；之后指数增加 |
 
@@ -105,10 +106,15 @@ test -e .env || cp .env.example .env
 当前适配器要求支持 `POST /chat/completions`、Bearer 认证、`messages`、`temperature`、`max_tokens`，
 并返回 `model` 和非空的 `choices[0].message.content`。`x-request-id` 是可选响应头。
 
-“OpenAI 兼容”不保证以上参数均受支持，更不表示已支持原生 Structured Output、Tool Calling 或流式响应。
-不支持的能力不要通过静默丢弃参数来假装兼容；先核对供应商文档。作者实验只代表当时的模型与配置，不是当前兼容性承诺。
+结构化提取还要求支持 `response_format.type=json_schema` 和 `strict=true`。
+当前代码已发送这些参数并做本地领域校验，但不保证每家兼容服务都支持它们；
+不支持时明确失败，不能静默删除 Schema。Tool Calling 和流式响应尚未实现。
 
-### 执行与输出
+若响应提供 `finish_reason`，只接受 `stop`；截断、内容过滤、工具调用等不能被当成完整文本。
+非空 `refusal` 也视为失败。为兼容现有服务允许结束原因缺失或为 `null`，但这意味着无法据此检测截断，
+需要通过真实冒烟核实供应商行为。作者历史实验不是当前兼容性承诺。
+
+### 文本实验
 
 Windows：
 
@@ -126,6 +132,27 @@ macOS / Linux：
 内容和延迟不要求与作者记录一致；当前程序在整轮成功后才打印结果，等待期间没有实时进度输出。
 失败时异常向上传播并以非零状态退出，不会伪造成功结果。当前输出不是经领域 Schema 验证的行李额 JSON。
 
+### 结构化提取
+
+输入为非空的单段文本，最多 20,000 字符。使用无私人信息的合成示例：
+
+Windows / PowerShell：
+
+```powershell
+.\.venv\Scripts\python.exe -m baggage_extractor.extract_cli "经济舱可免费托运1件23kg行李。"
+```
+
+macOS / Linux：
+
+```bash
+.venv/bin/python -m baggage_extractor.extract_cli "经济舱可免费托运1件23kg行李。"
+```
+
+成功时 stdout 只输出符合[领域契约](../month-01-llm-foundations/docs/schema.md)的 JSON，
+仍需人工对照原文检查事实。失败时返回非零退出码；配置错误只提示字段名，
+输入、解析、领域和 Provider 错误写入 stderr，不返回伪造的空规则。
+提取 CLI 当前不输出计时、Token 或费用，不要把文本实验的元信息能力算在它上面。
+
 ## 常见问题
 
 | 现象 | 排查方式 |
@@ -138,6 +165,8 @@ macOS / Linux：
 | 404 或参数不支持 | 检查 Base URL 是否重复追加了 `/chat/completions`，以及模型 API 协议 |
 | 429 / 5xx / 超时 | 查看配额、服务状态、网络和重试配置；不要用无限重试处理 |
 | HTTP 200 但空正文 | 核对模型行为和输出上限；部分推理模型会消耗预算但没有最终正文，不应视为成功 |
+| `did not finish normally` | 检查结束原因和输出上限；截断不会自动重试，不把不完整结果当作成功 |
+| JSON / 领域校验失败 | 检查重复键、非标准数值、缺键及类型；不从 Markdown 中猜测 JSON，不静默修复 |
 | 长时间没有输出 | 当前入口先完成全部案例再打印；结合超时和重试判断，避免反复启动产生额外费用 |
 
 提交问题时附操作系统、Python 版本、失败命令、脱敏异常和相关依赖版本；不要附完整 `.env`、授权头或敏感模型响应。

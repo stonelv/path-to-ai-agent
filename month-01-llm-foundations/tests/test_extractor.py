@@ -164,6 +164,32 @@ async def test_extract_rejects_invalid_json() -> None:
 
 
 @pytest.mark.parametrize(
+    "content",
+    [
+        '{"airline_code": "CA", "airline_code": null, "airline_name": null,'
+        '"free_baggage_rules": [], "baggage_rules": []}',
+        '{"airline_code": NaN, "airline_name": null,'
+        '"free_baggage_rules": [], "baggage_rules": []}',
+        '{"airline_code": Infinity, "airline_name": null,'
+        '"free_baggage_rules": [], "baggage_rules": []}',
+        '{"airline_code": -Infinity, "airline_name": null,'
+        '"free_baggage_rules": [], "baggage_rules": []}',
+        '{"airline_code": null, "airline_name": null, "baggage_rules": [],'
+        '"free_baggage_rules": [{"cabin_class": null, "fare_codes": [],'
+        '"checked_baggage": null, "pieces": 1, "pieces": 2, "special_notes": "",'
+        '"size_limit": {"length": null, "width": null, "height": null, "note": ""}}]}',
+    ],
+)
+async def test_extract_rejects_ambiguous_or_nonstandard_json(content: str) -> None:
+    provider = StubProvider(content=content)
+
+    with pytest.raises(StructuredOutputParseError, match="valid JSON"):
+        await BaggageExtractor(provider).extract("policy")
+
+    assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize(
     "invalid_data",
     [
         {

@@ -1,4 +1,5 @@
 import json
+from typing import NoReturn
 
 from pydantic import ValidationError
 
@@ -14,6 +15,19 @@ from baggage_extractor.providers import ModelProvider, ModelRequest, StructuredO
 MAX_POLICY_TEXT_LENGTH = 20_000
 STRUCTURED_OUTPUT_NAME = "baggage_extraction"
 STRUCTURED_OUTPUT_DESCRIPTION = f"Airline baggage extraction using {PROMPT_VERSION}."
+
+
+def _reject_nonstandard_constant(value: str) -> NoReturn:
+    raise ValueError("Nonstandard JSON numeric constant.")
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON object key.")
+        result[key] = value
+    return result
 
 
 class BaggageExtractor:
@@ -34,8 +48,12 @@ class BaggageExtractor:
         response = await self._provider.generate(request)
 
         try:
-            data = json.loads(response.content)
-        except json.JSONDecodeError as error:
+            data = json.loads(
+                response.content,
+                parse_constant=_reject_nonstandard_constant,
+                object_pairs_hook=_reject_duplicate_keys,
+            )
+        except ValueError as error:
             raise StructuredOutputParseError(
                 "Model structured output was not valid JSON."
             ) from error

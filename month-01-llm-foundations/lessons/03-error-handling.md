@@ -16,15 +16,17 @@
 | 5xx | ServerError | 是，有次数上限 |
 | 其他 4xx | InvalidRequestError | 否 |
 | HTTPX 超时 | ProviderTimeoutError | 是，有次数上限 |
-| HTTPX ConnectError | ProviderConnectionError | 是，有次数上限 |
-| 非法 JSON、缺少 choices、空正文 | InvalidResponseError | 否 |
+| HTTPX NetworkError（含连接、读写失败）、RemoteProtocolError | ProviderConnectionError | 是，有次数上限 |
+| 非法响应 JSON、缺少 choices、空正文、明确拒绝、非正常结束、意外 3xx | InvalidResponseError | 否 |
 
-其他未显式映射的异常继续向上传播，不承诺当前适配器覆盖所有传输故障。
+本地协议错误、调用取消及其他未显式映射的异常继续向上传播，不承诺当前适配器覆盖所有传输故障。
 连接超时与读取超时分别配置；write 使用读取超时，pool 使用连接超时。
 注入自定义 HTTP 客户端时，超时由该客户端的配置负责。
 
 默认重试次数为 2，表示最多调用 3 次。默认退避依次为 0.5、1.0 秒，最后一次失败后不再等待。
 当前不解析 `Retry-After`，没有 jitter、熔断或端到端 deadline，不应将它描述为完整生产重试系统。
+若供应商提供结束原因，只接受 `stop`；为兼容已有服务，缺失或 `null` 仍允许，但无法据此判断截断。
+响应正文被截断或明确拒绝不会自动重试；读写故障重试可能产生重复模型计算和额外费用。
 
 ## 动手任务
 

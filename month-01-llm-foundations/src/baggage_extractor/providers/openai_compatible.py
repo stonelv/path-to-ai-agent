@@ -1,7 +1,7 @@
 import asyncio
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from baggage_extractor.config import Settings
 from baggage_extractor.providers.base import ModelRequest, ModelResponse
@@ -19,10 +19,12 @@ from baggage_extractor.providers.errors import (
 
 class _ResponseMessage(BaseModel):
     content: str
+    refusal: str | None = None
 
 
 class _ResponseChoice(BaseModel):
     message: _ResponseMessage
+    finish_reason: str | None = None
 
 
 class _ChatCompletionResponse(BaseModel):
@@ -101,14 +103,21 @@ class OpenAICompatibleProvider:
             raise ServerError(f"Model provider server error (HTTP {status_code}).", retryable=True)
         if status_code >= 400:
             raise InvalidRequestError(f"Model request was rejected (HTTP {status_code}).")
+        if not 200 <= status_code < 300:
+            raise InvalidResponseError(f"Unexpected model response status (HTTP {status_code}).")
 
         try:
             completion = _ChatCompletionResponse.model_validate(response.json())
-        except (ValueError, ValidationError) as error:
+        except ValueError as error:
             raise InvalidResponseError("Model response had an invalid format.") from error
         if not completion.choices:
             raise InvalidResponseError("Model response did not contain any choices.")
-        content = completion.choices[0].message.content
+        choice = completion.choices[0]
+        if choice.message.refusal:
+            raise InvalidResponseError("Model refused the request.")
+        if choice.finish_reason not in (None, "stop"):
+            raise InvalidResponseError("Model response did not finish normally.")
+        content = choice.message.content
         if not content.strip():
             raise InvalidResponseError("Model response contained empty content.")
 
@@ -134,7 +143,7 @@ class OpenAICompatibleProvider:
             )
         except httpx.TimeoutException as error:
             raise ProviderTimeoutError("Model request timed out.", retryable=True) from error
-        except httpx.ConnectError as error:
+        except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
             raise ProviderConnectionError(
-                "Could not connect to the model provider.", retryable=True
+                "Model provider connection failed.", retryable=True
             ) from error

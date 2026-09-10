@@ -223,6 +223,9 @@ async def test_generate_retries_rate_limit_then_succeeds(settings: Settings) -> 
         (httpx.ConnectTimeout, ProviderTimeoutError),
         (httpx.ReadTimeout, ProviderTimeoutError),
         (httpx.ConnectError, ProviderConnectionError),
+        (httpx.ReadError, ProviderConnectionError),
+        (httpx.WriteError, ProviderConnectionError),
+        (httpx.RemoteProtocolError, ProviderConnectionError),
     ],
 )
 @respx.mock
@@ -299,3 +302,95 @@ async def test_generate_uses_bounded_exponential_backoff(
 
     assert route.call_count == 3
     assert sleep.await_args_list == [call(0.5), call(1.0)]
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter", "tool_calls", "unknown"])
+@respx.mock
+async def test_generate_rejects_unfinished_content(
+    settings: Settings, finish_reason: str
+) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "model": "test-model",
+                "choices": [
+                    {"message": {"content": "{}"}, "finish_reason": finish_reason}
+                ],
+            },
+        )
+    )
+
+    with pytest.raises(InvalidResponseError, match="did not finish normally"):
+        await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_generate_rejects_explicit_refusal(settings: Settings) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "model": "test-model",
+                "choices": [
+                    {
+                        "message": {"content": "{}", "refusal": "refused"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+    )
+
+    with pytest.raises(InvalidResponseError, match="refused"):
+        await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_generate_accepts_normal_finish(settings: Settings) -> None:
+    respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "model": "test-model",
+                "choices": [
+                    {"message": {"content": "done", "refusal": None}, "finish_reason": "stop"}
+                ],
+            },
+        )
+    )
+
+    result = await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
+
+    assert result.content == "done"
+
+
+@respx.mock
+async def test_generate_does_not_accept_redirect_body_as_success(settings: Settings) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            302,
+            json={"model": "test-model", "choices": [{"message": {"content": "redirect"}}]},
+        )
+    )
+
+    with pytest.raises(InvalidResponseError, match="HTTP 302"):
+        await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_generate_does_not_retry_local_protocol_errors(settings: Settings) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        side_effect=httpx.LocalProtocolError("invalid local request")
+    )
+
+    with pytest.raises(httpx.LocalProtocolError):
+        await OpenAICompatibleProvider(settings).generate(ModelRequest(messages=()))
+
+    assert route.call_count == 1

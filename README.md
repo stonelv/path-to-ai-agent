@@ -65,6 +65,7 @@
 
 ## 参与与记录
 
+- 文档各自负责什么、修改时需要同步哪些入口，见[文档维护约定](./CONTRIBUTING.md#文档职责与同步规则)。
 - 使用[学习记录模板](./templates/learning-log.md)在自己的 Fork 中记录，不修改作者日志来代表自己的进度。
 - 修正文档、增加失败案例或课程练习前，请阅读[贡献指南](./CONTRIBUTING.md)。
 - 课程写作和实验记录分别使用[课程模板](./templates/lesson.md)与[实验报告模板](./templates/experiment-report.md)。

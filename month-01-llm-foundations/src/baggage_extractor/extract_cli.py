@@ -3,6 +3,8 @@ import asyncio
 import sys
 from collections.abc import Sequence
 
+from pydantic import ValidationError
+
 from baggage_extractor.config import get_settings
 from baggage_extractor.errors import ExtractionError
 from baggage_extractor.extractor import BaggageExtractor
@@ -27,10 +29,16 @@ def main(
     provider: ModelProvider | None = None,
 ) -> int:
     args = build_parser().parse_args(argv)
-    active_provider = provider or OpenAICompatibleProvider(get_settings())
+    if provider is None:
+        try:
+            provider = OpenAICompatibleProvider(get_settings())
+        except ValidationError as error:
+            fields = sorted({str(detail["loc"][0]) for detail in error.errors()})
+            print(f"Invalid model configuration: {', '.join(fields)}.", file=sys.stderr)
+            return 1
 
     try:
-        result = asyncio.run(BaggageExtractor(active_provider).extract(args.policy_text))
+        result = asyncio.run(BaggageExtractor(provider).extract(args.policy_text))
     except (ExtractionError, ModelProviderError) as error:
         print(f"Extraction failed: {error}", file=sys.stderr)
         return 1

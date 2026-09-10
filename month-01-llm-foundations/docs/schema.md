@@ -1,6 +1,6 @@
 # 行李额领域 Schema
 
-本文件说明 `baggage_extractor.models` 中的最终数据契约。自动生成的 JSON Schema
+本文件是[领域模型](../src/baggage_extractor/models.py)的字段语义与提取约定入口。自动生成的 JSON Schema
 由 `ExtractionResult.model_json_schema()` 提供，不在这里保存副本，以免文档与代码漂移。
 
 ## 顶层结构
@@ -15,12 +15,13 @@
 | `baggage_rules` | `CarryOnBaggageRule[]` | 随身行李规则 |
 
 两个规则数组始终存在。没有对应政策时返回空数组，不能省略字段，也不能把两类规则合并。
-航司信息未在输入或调用上下文中提供时保留为 `null`，不得猜测。
+航司信息未在输入原文中提供时保留为 `null`，不得猜测；当前提取器没有额外航司上下文参数。
 
 ## 规则结构
 
 免费托运行李和随身行李使用相同的 JSON 字段，但在 Python 中分别使用
 `FreeBaggageRule` 和 `CarryOnBaggageRule`，使调用方能在类型层区分两类规则。
+这不保证模型把事实放入了正确数组；JSON 字段相同，放错位置仍可能通过结构校验。
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
@@ -57,43 +58,55 @@
 - 没有免费托运行李或随身行李规则时，对应数组为 `[]`。
 - 未定义字段会被拒绝，避免模型输出悄悄扩展契约。
 
-重量使用字符串保留额度语义，并规范为紧凑的 kg 表达，例如 `"40kg"`。件数和三个尺寸字段
-使用非负整数；尺寸单位固定为 cm。不同重量或尺寸单位之间的换算不在领域模型中进行。
+公斤重量在提取时使用紧凑的 kg 表达，例如 `"40kg"` 或 `"每件不超过23kg"`，保留额度语义。
+这是 Prompt 的提取约定，不是 Pydantic 自动归一化或 kg 格式校验。
+件数和三个尺寸字段只接受非负整数或 `null`，拒绝布尔值、浮点数和数字字符串；明确零额度为 `0`，不是未知。
+尺寸单位固定为 cm；单位换算、最大/最小值判断和原文证据核对不在领域模型中执行。
 
 ## 结构示例
 
-以下从东航期望结果中各展示一条免费托运行李和随身行李规则：
+以下为合成教学示例，不是真实航司政策。
+
+输入：
+
+```text
+示例航空经济舱 Y、B、M 舱旅客可免费托运1件行李，每件不超过23公斤，
+三边之和不超过158厘米；同一批旅客可携带1件随身行李，每件不超过5公斤，
+尺寸不超过55×40×20厘米。
+```
+
+期望输出：
 
 ```json
 {
-  "airline_code": "MU",
-  "airline_name": "中国东方航空",
+  "airline_code": null,
+  "airline_name": "示例航空",
   "free_baggage_rules": [
     {
-      "cabin_class": "头等舱",
-      "fare_codes": [],
-      "checked_baggage": "40kg",
-      "pieces": null,
+      "cabin_class": "经济舱",
+      "fare_codes": ["Y", "B", "M"],
+      "checked_baggage": "每件不超过23kg",
+      "pieces": 1,
       "size_limit": {
-        "length": 40,
-        "width": 60,
-        "height": 100,
-        "note": "每件行李尺寸不小于5×15×20cm且不超过40×60×100cm"
+        "length": null,
+        "width": null,
+        "height": null,
+        "note": "三边之和不超过158厘米"
       },
-      "special_notes": "每件重量不超过50kg"
+      "special_notes": ""
     }
   ],
   "baggage_rules": [
     {
-      "cabin_class": "头等舱",
-      "fare_codes": [],
-      "checked_baggage": "10kg",
-      "pieces": 2,
+      "cabin_class": "经济舱",
+      "fare_codes": ["Y", "B", "M"],
+      "checked_baggage": "每件不超过5kg",
+      "pieces": 1,
       "size_limit": {
         "length": 55,
         "width": 40,
         "height": 20,
-        "note": "每件行李尺寸不超过55×40×20cm"
+        "note": "尺寸不超过55×40×20厘米"
       },
       "special_notes": ""
     }
@@ -101,28 +114,26 @@
 }
 ```
 
+原文没有代码，所以 `airline_code` 为 `null`；两类行李都明确给出 1 件，因此 `pieces` 都是 `1`。
+托运只给三边之和，不推算长宽高。说明文本保留限制语义，不要求模型逐字生成相同排版。
+
 ## 当前边界
 
-领域模型只校验结构、必填键、文本是否为空白以及未知字段。它不会：
+领域模型校验结构、必填键、整数类型与非负约束、受约束文本是否为空白以及未知字段。它不会：
 
 - 判断航司代码与名称是否匹配。
 - 解析重量字符串中的数值。
 - 换算单位或推算缺失尺寸。
 - 判断舱位代码是否真实存在。
 - 判断提取内容是否确实来自输入原文。
+- 检测所有超范围条件、政策冲突或被放错类别的规则。
 
-这些约束需要在后续提取服务、归一化服务或固定评估集中分别实现。
+这些约束需要通过后续领域逻辑、归一化服务或固定评估分别验证。
+当前提取器已实现结构校验，但尚未实现通用事实核对或超范围自动拒答。
 
 ## 提示词约定
 
-版本化提示词位于 `baggage_extractor.prompts`。它要求模型：
-
-- 只输出 JSON，并严格区分两个规则数组。
-- 将公斤表示规范为 `kg`，但不进行 kg/lb 数值换算。
-- 将件数输出为整数。
-- 将明确以 cm 给出的长宽高输出为整数。
-- 同时存在最小和最大尺寸时选择最大尺寸，并在 `note` 保留完整限制。
-- 没有 `note` 或 `special_notes` 时输出空字符串。
-
-提示词不能替代 JSON Schema 和 Pydantic 校验。结构化提取器会将本 Schema 作为严格的
-Structured Output 请求发送，并在收到 JSON 正文后再次执行 Pydantic 校验。
+上述提取约定由[版本化 Prompt](../src/baggage_extractor/prompts.py)表达，不在多个文档中保存提示词副本。
+[提取器](../src/baggage_extractor/extractor.py)发送生成的严格 JSON Schema，
+拒绝损坏 JSON、重复对象键和 `NaN` / `Infinity`，再执行 Pydantic 校验。
+更改 Prompt 时应记录版本并进行相应回归；提示词仍不能替代事实质量评估。

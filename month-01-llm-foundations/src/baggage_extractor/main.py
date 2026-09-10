@@ -2,12 +2,12 @@ import asyncio
 
 from baggage_extractor.config import get_settings
 from baggage_extractor.experiments import EXPERIMENT_CASES, ExperimentCase
-from baggage_extractor.providers import OpenAICompatibleProvider
+from baggage_extractor.providers import ModelProvider, OpenAICompatibleProvider
 from baggage_extractor.telemetry import TimedModelResponse, generate_with_timing
 
 
 async def run_model_experiment(
-    provider: OpenAICompatibleProvider,
+    provider: ModelProvider,
     case: ExperimentCase,
 ) -> TimedModelResponse:
     return await generate_with_timing(provider, case.to_model_request())
