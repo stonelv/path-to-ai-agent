@@ -95,6 +95,7 @@ test -e .env || cp .env.example .env
 | `MODEL_API_KEY` | 自己账户的非空白有效密钥；不要粘贴到 issue、截图或提交中 |
 | `MODEL_NAME` | 非空白的真实模型名称，不照抄作者历史记录 |
 | `MODEL_BASE_URL` | HTTP(S) 基础 URL，不能含查询参数、片段或账号密码；程序追加 `/chat/completions`，服务要求 `/v1` 时需包含它 |
+| `MODEL_STRUCTURED_OUTPUT_MODE` | `json_schema`（默认，服务端严格 Schema）或 `json_object`（仅保证合法 JSON，例如 DeepSeek Chat Completions） |
 | `MODEL_CONNECT_TIMEOUT_SECONDS` | 连接超时，必须是大于 0 的有限数值，默认 10 秒 |
 | `MODEL_READ_TIMEOUT_SECONDS` | 读取超时，必须是大于 0 的有限数值，默认 30 秒 |
 | `MODEL_MAX_RETRIES` | 首次请求之外的重试次数，0～5，默认 2 |
@@ -108,9 +109,10 @@ test -e .env || cp .env.example .env
 当前适配器要求支持 `POST /chat/completions`、Bearer 认证、`messages`、`temperature`、`max_tokens`，
 并返回 `model` 和非空的 `choices[0].message.content`。`x-request-id` 是可选响应头。
 
-结构化提取还要求支持 `response_format.type=json_schema` 和 `strict=true`。
-当前代码已发送这些参数并做本地领域校验，但不保证每家兼容服务都支持它们；
-不支持时明确失败，不能静默删除 Schema。Tool Calling 和流式响应尚未实现。
+结构化提取默认要求支持 `response_format.type=json_schema` 和 `strict=true`。
+仅支持 JSON Output 的服务应显式设置 `MODEL_STRUCTURED_OUTPUT_MODE=json_object`；此模式不把
+JSON Schema 发给服务端，但仍执行严格 JSON 解析和本地领域校验。不要因为请求失败而自动降级，
+否则同一配置的约束强度会在运行间变化。Tool Calling 和流式响应尚未实现。
 
 若响应提供 `finish_reason`，只接受 `stop`；截断、内容过滤、工具调用等不能被当成完整文本。
 非空 `refusal` 也视为失败。为兼容现有服务允许结束原因缺失或为 `null`，但这意味着无法据此检测截断，

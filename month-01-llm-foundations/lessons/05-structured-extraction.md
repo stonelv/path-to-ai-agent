@@ -37,7 +37,8 @@ Prompt 不能替代程序校验；Pydantic 校验通过也不能证明模型没�
 
 - `ModelRequest.structured_output` 默认是 `None`，普通文本实验不发送 `response_format`。
 - `StructuredOutputSpec` 表达名称、描述、JSON Schema 和 strict，不传供应商 SDK 对象。
-- 适配器把它映射为 `response_format.type=json_schema`；不支持时明确失败，不静默退化。
+- 适配器默认把它映射为 `response_format.type=json_schema`；仅支持 JSON Output 的服务通过
+  `MODEL_STRUCTURED_OUTPUT_MODE=json_object` 显式选择兼容模式，不按错误自动降级。
 - 提取器从 `ExtractionResult.model_json_schema()` 生成 Schema，并关联 Prompt 版本。
 - 请求认证从 Settings 的 SecretStr 显式读取；Mock 只使用测试密钥，不打印真实凭据。
 
@@ -106,13 +107,14 @@ Stub 只能证明给定响应时程序的行为，不能证明模型会返回正
 ## 可选真实模型冒烟
 
 统一按[结构化提取运行说明](../../docs/setup.md#结构化提取)执行。
-确认服务支持严格 JSON Schema，使用可外发的合成政策并确认预算。
+确认服务支持所配置的结构化输出模式，使用可外发的合成政策并确认预算。
 逐字段对照原文，记录模型、代码、Prompt、Schema 和结果；Token 或延迟未采集时明确标注。
 没有账户或未确认费用时跳过，并写“真实模型未验证”，一次成功不能替代固定质量评估。
 
 ## 常见失败
 
-- **接口不支持 Schema**：核对供应商能力，不删除 `response_format` 来假装成功。
+- **接口不支持 Schema**：核对供应商能力；仅支持 JSON Output 时显式使用 `json_object`，
+  并保留严格 JSON 解析与本地领域校验，不按错误自动降级。
 - **JSON 合法仍失败**：检查缺键、非整数数值和受约束空白字段，不静默丢弃它们。
 - **HTTP 200 却失败**：检查正文、拒绝标记和结束原因；截断不能通过重复请求冒充恢复。
 - **业务事实错误却测试通过**：Schema 只验证结构，应增加固定评估而不是宣称程序能识别所有事实错误。

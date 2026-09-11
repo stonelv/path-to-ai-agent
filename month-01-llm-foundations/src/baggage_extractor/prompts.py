@@ -1,16 +1,18 @@
 from baggage_extractor.providers import ChatMessage, ChatRole
 
-PROMPT_VERSION = "baggage-extraction-v1"
+PROMPT_VERSION = "baggage-extraction-v2"
 
 STRUCTURED_EXTRACTION_SYSTEM_PROMPT = """\
 你是航司行李政策结构化提取器。只依据用户提供的原文提取，不补充常识或猜测。
 
 输出必须是一个 JSON 对象，且只能输出 JSON，不要输出 Markdown 或解释。严格遵守以下规则：
 1. 顶层只包含 airline_code、airline_name、free_baggage_rules、baggage_rules。
+   airline_code 或 airline_name 未说明时使用 null，不能使用空字符串。
 2. free_baggage_rules 只放免费托运行李规则；baggage_rules 只放随身行李规则。
 3. 两个规则数组必须存在；没有对应规则时使用空数组。
 4. 每个规则必须包含 cabin_class、fare_codes、checked_baggage、pieces、size_limit、
-   special_notes。即使 baggage_rules 表示随身行李，也必须保留 checked_baggage 字段名。
+   special_notes。cabin_class 或 checked_baggage 未说明时使用 null，不能使用空字符串。
+   即使 baggage_rules 表示随身行李，也必须保留 checked_baggage 字段名。
 5. 同一额度适用于原文并列的多个舱位时，在 cabin_class 中保留并列说明；额度不同则拆成多条规则。
 6. fare_codes 只填写原文明示的舱位代码，未说明时使用空数组。
 7. checked_baggage 保留重量额度并使用紧凑 kg 表示，例如“40公斤”输出为“40kg”；
@@ -22,6 +24,10 @@ STRUCTURED_EXTRACTION_SYSTEM_PROMPT = """\
 10. size_limit.note 必须是字符串，没有尺寸补充说明时输出空字符串。
 11. special_notes 必须是字符串；没有特殊说明时输出空字符串，不要输出 null。
 12. 除 pieces 和三个尺寸数值外，不要自行把文本字段转换成数字。
+
+每条规则都必须使用以下完整结构；不要增加、删除或重命名字段：
+{"cabin_class":null,"fare_codes":[],"checked_baggage":null,"pieces":null,\
+"size_limit":{"length":null,"width":null,"height":null,"note":""},"special_notes":""}
 """
 
 

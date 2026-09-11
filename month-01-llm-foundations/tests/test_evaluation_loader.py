@@ -95,6 +95,20 @@ def test_load_predictions_rejects_duplicate_case_id(tmp_path: Path) -> None:
         load_predictions(path)
 
 
+def test_load_predictions_rejects_missing_nested_schema_field(tmp_path: Path) -> None:
+    prediction = {
+        "case_id": "zh-simple-001",
+        "status": "success",
+        "actual": case_data()["expected"],
+    }
+    del prediction["actual"]["free_baggage_rules"][0]["size_limit"]["note"]
+    path = tmp_path / "predictions.jsonl"
+    write_lines(path, [json.dumps(prediction, ensure_ascii=False)])
+
+    with pytest.raises(EvaluationDataError, match="line 1"):
+        load_predictions(path)
+
+
 def test_write_helpers_refuse_to_overwrite(tmp_path: Path) -> None:
     prediction = PredictionRecord(
         case_id="case-001",

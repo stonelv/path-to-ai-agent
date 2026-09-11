@@ -1,3 +1,4 @@
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
@@ -7,10 +8,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+class StructuredOutputMode(StrEnum):
+    JSON_SCHEMA = "json_schema"
+    JSON_OBJECT = "json_object"
+
+
 class Settings(BaseSettings):
     model_api_key: SecretStr
     model_name: str = Field(min_length=1, pattern=r".*\S.*")
     model_base_url: str = Field(min_length=1)
+    model_structured_output_mode: StructuredOutputMode = StructuredOutputMode.JSON_SCHEMA
     model_connect_timeout_seconds: float = Field(default=10, gt=0, allow_inf_nan=False)
     model_read_timeout_seconds: float = Field(default=30, gt=0, allow_inf_nan=False)
     model_max_retries: int = Field(default=2, ge=0, le=5)

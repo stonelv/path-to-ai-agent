@@ -135,6 +135,7 @@
 ## 提示词约定
 
 上述提取约定由[版本化 Prompt](../src/baggage_extractor/prompts.py)表达，不在多个文档中保存提示词副本。
-[提取器](../src/baggage_extractor/extractor.py)发送生成的严格 JSON Schema，
-拒绝损坏 JSON、重复对象键和 `NaN` / `Infinity`，再执行 Pydantic 校验。
+[提取器](../src/baggage_extractor/extractor.py)在 `json_schema` 模式发送生成的严格 JSON Schema；
+在 `json_object` 模式依赖版本化 Prompt 描述结构。两种模式都会拒绝损坏 JSON、重复对象键和
+`NaN` / `Infinity`，再执行 Pydantic 校验。
 更改 Prompt 时应记录版本并进行相应回归；提示词仍不能替代事实质量评估。

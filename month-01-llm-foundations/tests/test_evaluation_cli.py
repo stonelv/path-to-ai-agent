@@ -292,7 +292,7 @@ def test_run_command_saves_predictions_and_versioned_report_without_real_network
     assert prediction["case_id"] == case.id
     assert prediction["latency_seconds"] >= 0
     assert report["model"] == "test-model"
-    assert report["prompt_version"] == "baggage-extraction-v1"
+    assert report["prompt_version"] == "baggage-extraction-v2"
     assert report["domain_schema_version"] == "baggage-result-v1"
     assert report["package_version"] == "0.1.0"
     assert report["model_max_retries"] == 2

@@ -133,6 +133,26 @@ def test_score_case_counts_value_added_where_expected_is_unknown() -> None:
     assert score.issues[0].path == "free_baggage_rules[0].size_limit.length"
 
 
+def test_score_case_counts_unknown_pieces_as_wrong_value() -> None:
+    data = case_data()
+    data["expected"]["free_baggage_rules"][0]["pieces"] = None
+    case = EvaluationCase.model_validate(data)
+    actual = case.expected.model_copy(deep=True)
+    actual.free_baggage_rules[0].pieces = 1
+
+    score = score_case(
+        case,
+        PredictionRecord(case_id=case.id, status="success", actual=actual),
+    )
+
+    assert score.field_metrics["free_baggage_rules.pieces"].accuracy == 0
+    assert score.unsupported_values == 1
+    assert any(
+        issue.path == "free_baggage_rules[0].pieces" and issue.kind == "wrong_value"
+        for issue in score.issues
+    )
+
+
 def test_evaluate_predictions_keeps_missing_prediction_in_denominator() -> None:
     first = make_case()
     second = make_case(id="zh-simple-002")

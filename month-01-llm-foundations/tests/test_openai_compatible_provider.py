@@ -5,7 +5,7 @@ import httpx
 import pytest
 import respx
 
-from baggage_extractor.config import Settings
+from baggage_extractor.config import Settings, StructuredOutputMode
 from baggage_extractor.providers import (
     AuthenticationError,
     ChatMessage,
@@ -118,6 +118,32 @@ async def test_generate_sends_strict_json_schema_response_format(settings: Setti
             "strict": True,
         },
     }
+
+
+@respx.mock
+async def test_generate_sends_json_object_response_format(settings: Settings) -> None:
+    route = respx.post("https://models.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"model": "test-model", "choices": [{"message": {"content": "{}"}}]},
+        )
+    )
+    json_object_settings = settings.model_copy(
+        update={"model_structured_output_mode": StructuredOutputMode.JSON_OBJECT}
+    )
+    request = ModelRequest(
+        messages=(ChatMessage(role=ChatRole.USER, content="Return JSON."),),
+        structured_output=StructuredOutputSpec(
+            name="baggage_extraction",
+            description="Structured airline baggage policy extraction.",
+            json_schema={"type": "object"},
+        ),
+    )
+
+    await OpenAICompatibleProvider(json_object_settings).generate(request)
+
+    payload = json.loads(route.calls.last.request.content)
+    assert payload["response_format"] == {"type": "json_object"}
 
 
 @respx.mock
