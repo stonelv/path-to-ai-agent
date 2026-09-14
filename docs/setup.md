@@ -58,17 +58,19 @@ python3.13 -m venv .venv
 
 ### 先确认边界
 
-当前有三个真实模型入口，均不是 HTTP API 服务：
+当前有四个真实模型入口：
 
 | 入口 | 发出的内容 | 默认最大 HTTP 尝试数 | 输出 |
 | --- | --- | --- | --- |
 | `baggage_extractor.main` | 三组[实验文本](../month-01-llm-foundations/src/baggage_extractor/experiments.py) | 整轮 9 次 | 未经领域校验的文本与调用元信息 |
 | `baggage_extractor.extract_cli` | 位置参数中的单段政策 | 每次执行 3 次 | 通过领域 Schema 的 JSON |
 | `baggage_extractor.evaluation.cli run` | 指定固定数据文件的全部案例 | 案例数 × 3 | 保存逐案例预测和汇总质量报告 |
+| `POST /v1/extractions` | 请求正文中的单段政策 | 每个请求 3 次 | 带请求 ID、通过领域 Schema 的 JSON |
 
 运行前确认可以将文本发送给你选择的服务；不要使用公司内部或含个人信息的原文。
 默认 `MODEL_MAX_RETRIES=2`，表示首次请求之外最多重试 2 次；不可重试错误或重试耗尽会提前终止。
-文本实验的输出上限分别为 1000、1500、2500 Token；提取 CLI 和固定评估当前未指定输出 Token 上限，使用供应商默认值。
+文本实验的输出上限分别为 1000、1500、2500 Token；提取 CLI、固定评估和 API
+当前未指定输出 Token 上限，使用供应商默认值。
 这些设置不是实际用量或总费用上限。
 当前程序没有自动费用熔断，也未采集 Token 用量；先在供应商侧设置预算或额度限制，费用以供应商计费规则为准。
 
@@ -100,6 +102,8 @@ test -e .env || cp .env.example .env
 | `MODEL_READ_TIMEOUT_SECONDS` | 读取超时，必须是大于 0 的有限数值，默认 30 秒 |
 | `MODEL_MAX_RETRIES` | 首次请求之外的重试次数，0～5，默认 2 |
 | `MODEL_RETRY_BACKOFF_SECONDS` | 首次退避时间，0～30 秒，默认 0.5；之后指数增加 |
+| `API_MAX_CONCURRENT_REQUESTS` | 单进程同时执行的提取数，1～100，默认 4 |
+| `API_ACQUIRE_TIMEOUT_SECONDS` | 等待提取并发名额的秒数，范围大于 0 且不超过 60，默认 1 |
 
 系统环境变量优先于 `.env`。程序按源码位置定位项目内 `.env`，而不是读取任意当前目录的文件。
 示例中的 `LOG_LEVEL` 当前尚未接入日志配置，修改它不会改变命令行输出。
@@ -156,6 +160,39 @@ macOS / Linux：
 仍需人工对照原文检查事实。失败时返回非零退出码；配置错误只提示字段名，
 输入、解析、领域和 Provider 错误写入 stderr，不返回伪造的空规则。
 提取 CLI 当前不输出计时、Token 或费用，不要把文本实验的元信息能力算在它上面。
+
+### FastAPI 服务
+
+服务启动时加载模型配置并复用 Provider 的 HTTP 连接池。健康与就绪检查不调用模型：
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn baggage_extractor.api.app:app `
+  --host 127.0.0.1 `
+  --port 8000
+```
+
+macOS / Linux 使用 `.venv/bin/python`。启动后可在另一个终端验证：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/ready
+
+$body = @{ text = "经济舱可免费托运1件23kg行李。" } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/v1/extractions `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+`POST /v1/extractions` 会把 `text` 发送给配置的模型并可能计费；`GET /health` 只表示 Web
+进程可响应，`GET /ready` 只表示本地配置已通过且提取器已创建，不探测供应商网络或额度。
+每个响应包含 `X-Request-ID`；请求也可提供由字母、数字、点、下划线或连字符组成的
+1～128 字符 ID。日志记录方法、路径、状态、耗时和请求 ID，不记录政策正文。
+
+单进程通过 `API_MAX_CONCURRENT_REQUESTS` 限制同时执行的提取数。等待超过
+`API_ACQUIRE_TIMEOUT_SECONDS` 时返回 503；这不是跨进程限流、认证或公网防护。
+错误响应区分请求校验、未就绪、容量、认证、限流、超时、供应商不可用和非法模型输出，
+但不返回供应商原始错误或模型正文。完整练习见[第 7 课](../month-01-llm-foundations/lessons/07-fastapi-service.md)。
 
 ### 真实模型固定评估
 

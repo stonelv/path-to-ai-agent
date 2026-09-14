@@ -13,6 +13,8 @@ def test_settings_read_environment_variables(
     monkeypatch.setenv("MODEL_STRUCTURED_OUTPUT_MODE", "json_object")
     monkeypatch.setenv("MODEL_CONNECT_TIMEOUT_SECONDS", "5")
     monkeypatch.setenv("MODEL_READ_TIMEOUT_SECONDS", "15")
+    monkeypatch.setenv("API_MAX_CONCURRENT_REQUESTS", "8")
+    monkeypatch.setenv("API_ACQUIRE_TIMEOUT_SECONDS", "2.5")
 
     settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
 
@@ -22,6 +24,8 @@ def test_settings_read_environment_variables(
     assert settings.model_structured_output_mode is StructuredOutputMode.JSON_OBJECT
     assert settings.model_connect_timeout_seconds == 5
     assert settings.model_read_timeout_seconds == 15
+    assert settings.api_max_concurrent_requests == 8
+    assert settings.api_acquire_timeout_seconds == 2.5
 
 
 def test_settings_reject_non_positive_read_timeout(
@@ -52,6 +56,8 @@ def test_settings_reject_non_positive_read_timeout(
         ("model_read_timeout_seconds", float("nan")),
         ("model_read_timeout_seconds", float("inf")),
         ("model_structured_output_mode", "unsupported"),
+        ("api_max_concurrent_requests", 0),
+        ("api_acquire_timeout_seconds", float("inf")),
     ],
 )
 def test_settings_reject_invalid_connection_configuration(field: str, value: object) -> None:

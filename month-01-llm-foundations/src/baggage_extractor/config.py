@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     model_read_timeout_seconds: float = Field(default=30, gt=0, allow_inf_nan=False)
     model_max_retries: int = Field(default=2, ge=0, le=5)
     model_retry_backoff_seconds: float = Field(default=0.5, ge=0, le=30)
+    api_max_concurrent_requests: int = Field(default=4, ge=1, le=100)
+    api_acquire_timeout_seconds: float = Field(default=1, gt=0, le=60, allow_inf_nan=False)
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(

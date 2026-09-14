@@ -8,14 +8,14 @@
 
 1. 阅读[入门导航](./docs/start-here.md)，确认前置知识和学习方式。
 2. 按[环境指南](./docs/setup.md)完成无 API Key 的离线验证。
-3. 进入[第 1～6 课](./month-01-llm-foundations/lessons/README.md)，先完成练习，再对照参考实现。
+3. 进入[第 1～7 课](./month-01-llm-foundations/lessons/README.md)，先完成练习，再对照参考实现。
 4. 用[验收指南](./docs/assessment.md)判断是否掌握，而不是仅勾选“读过”。
 
 **当前能运行什么？** 模型配置、异步文本调用、三组模型实验、计时、错误分类与有限重试、
-行李额领域 Schema、严格结构化提取 CLI、版本化固定评估集、确定性评分器和不访问真实模型的测试。
+行李额领域 Schema、严格结构化提取 CLI、版本化固定评估集、确定性评分器、FastAPI 服务和离线测试。
 
-**当前还没有什么？** FastAPI 服务、RAG、Agent Loop 和 Docker 部署。
-评分器已经可用，但仓库尚未执行并提交真实模型质量基线。
+**当前还没有什么？** RAG、Agent Loop 和 Docker 部署。
+评分器已经可用，但仓库尚未提交可复核的真实模型质量基线。
 计划中的目录树、接口和指标不是已交付功能。
 
 ## 适合谁
@@ -36,7 +36,7 @@
 | --- | --- | --- |
 | 00 | 环境与 Python 工程补课 | 起步指南可用：[环境配置](./docs/setup.md)、[第 1 课](./month-01-llm-foundations/lessons/01-project-setup.md) |
 | 01 | 可靠的 LLM 调用 | 第 2～3 课可学习：[课程索引](./month-01-llm-foundations/lessons/README.md)；流式调用等尚未实现 |
-| 02 | 结构化输出与评估 | 第 4～6 课可学习：领域 Schema、结构化提取、固定数据与评分器；真实模型基线未运行 |
+| 02 | 结构化输出、评估与 API 交付 | 第 4～7 课可学习：领域 Schema、结构化提取、固定评估与 FastAPI；仓库未提交真实模型基线 |
 | 03 | 工具调用、单 Agent 与基础 MCP 接入 | 规划中 |
 | 04 | 上下文工程、RAG 与记忆 | 规划中 |
 | 05 | 状态与业务流程 | 规划中 |

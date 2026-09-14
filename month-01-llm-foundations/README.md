@@ -6,7 +6,7 @@
 ## 1. 从哪里开始
 
 1. 按[环境指南](../docs/setup.md)安装项目并运行离线测试。
-2. 按[课程索引](./lessons/README.md)完成第 1～6 课的变式练习。
+2. 按[课程索引](./lessons/README.md)完成第 1～7 课的变式练习。
 3. 对照[领域契约](./docs/schema.md)解释字段、空值和校验边界。
 4. 用第 6 课固定数据和评分器建立质量基线，再按下方里程碑探索 API 与部署。
 
@@ -22,6 +22,7 @@
 | `python -m baggage_extractor.extract_cli "政策文本"` | 单段结构化提取 | 真实请求；输出通过领域校验，但不保证事实正确 |
 | `python -m baggage_extractor.evaluation.cli score ...` | 对保存的预测离线评分 | 无网络；验证评分与报告，不代表模型质量 |
 | `python -m baggage_extractor.evaluation.cli run ...` | 显式运行固定真实模型评估 | 可能计费；保存完整预测和质量报告 |
+| `python -m uvicorn baggage_extractor.api.app:app ...` | 本地 FastAPI 服务 | 健康与就绪不调用模型；提取接口会真实调用并可能计费 |
 
 上述 Python 命令需使用项目虚拟环境解释器。完整命令、供应商能力和费用边界只在
 [环境指南](../docs/setup.md#可选真实模型调用)维护，不把真实调用当成安装检查。
@@ -72,9 +73,9 @@ JSON Schema 从[模型代码](./src/baggage_extractor/models.py)生成，不手�
 
 ```text
 文本实验：main → experiments → ModelRequest → Provider → 文本与计时
-结构化提取：extract_cli → BaggageExtractor → ModelRequest → Provider
-                                  ↓                         ↓
-                           prompts + models ← JSON 解析与领域校验
+结构化提取：extract_cli / FastAPI → BaggageExtractor → ModelRequest → Provider
+                                           ↓                         ↓
+                                    prompts + models ← JSON 解析与领域校验
 ```
 
 | 位置 | 单一职责 |
@@ -87,12 +88,13 @@ JSON Schema 从[模型代码](./src/baggage_extractor/models.py)生成，不手�
 | [extractor.py](./src/baggage_extractor/extractor.py) | 输入校验、结构化请求、JSON 解析和领域校验 |
 | [extract_cli.py](./src/baggage_extractor/extract_cli.py) | 参数、输出、退出码；可注入测试 Provider |
 | [evaluation](./src/baggage_extractor/evaluation) | 案例/预测契约、JSONL 加载、确定性评分和评估 CLI |
+| [api](./src/baggage_extractor/api) | FastAPI 生命周期、HTTP 契约、错误映射、请求 ID 与并发门禁 |
 | [main.py](./src/baggage_extractor/main.py)、[experiments.py](./src/baggage_extractor/experiments.py)、[telemetry.py](./src/baggage_extractor/telemetry.py) | 实验编排、案例与计时 |
 | [tests](./tests) | 对应职责的离线回归 |
 
 运行依赖和开发工具以[项目配置](./pyproject.toml)为准。当前使用 Python 3.13、HTTPX、
-Pydantic、pytest 和 Ruff；FastAPI、Uvicorn、Docker 在实现服务时再引入。
-固定数据见[评估目录](./evals)，不提前创建空的 API 或部署文件，也不预装尚未使用的框架。
+Pydantic、FastAPI、Uvicorn、pytest 和 Ruff；Docker 在实现部署时再引入。
+固定数据见[评估目录](./evals)，不提前创建空的部署文件，也不预装尚未使用的框架。
 
 ## 4. 建议里程碑
 
@@ -103,14 +105,14 @@ Pydantic、pytest 和 Ruff；FastAPI、Uvicorn、Docker 在实现服务时再引
 | --- | --- | --- |
 | 第 1 周：可靠调用 | 第 1～3 课；配置、契约、异步、错误与重试 | 离线测试和调用路径解释；真实观察可选 |
 | 第 2 周：结构化输出与评估 | 第 4～6 课；Schema、提取 CLI、固定数据和评分器 | 变式测试、字段解释、开发/留出划分和质量报告 |
-| 第 3 周：API（规划） | 基于已有评分器和实际登记的质量基线实现 `POST /v1/extractions`、`GET /health`、`GET /ready` | 成功、参数错误、模型失败的 API Mock 测试 |
-| 第 4 周：部署与交付（规划） | 日志、请求 ID、并发限制、Docker、故障演练 | 本地部署复现、冻结评估报告和交付说明 |
+| 第 3 周：API | 第 7 课；`POST /v1/extractions`、`GET /health`、`GET /ready`、错误契约与并发门禁 | 成功、参数错误、模型失败、请求 ID 和并发的 API Stub 测试 |
+| 第 4 周：部署与交付（规划） | Docker、运行指标、认证/限流边界和故障演练 | 本地部署复现、冻结评估报告和交付说明 |
 
-API 规划接收 `text` 和可选语言信息，定义输入上限及明确的错误 Schema。
+API 第一版接收 `text`，复用 20,000 字符上限并提供明确的错误 Schema。
 将认证失败、限流、超时、非法输出与内部错误分开，不将所有失败转成空结果。
 日志不默认记录原文；逐步补齐 Prompt/Schema 版本、Token、重试次数与关联 ID。
 容器使用非 root 用户、环境变量注入配置，并验证健康与就绪状态。
-当前尚未实现这些服务能力，勿将教学 CLI 裸露到公网。
+当前 API 仅用于本地学习与受控验证，尚无认证、分布式限流或容器部署，勿裸露到公网。
 
 ## 5. 评估数据覆盖
 
@@ -137,7 +139,7 @@ API 规划接收 `text` 和可选语言信息，定义输入上限及明确的�
 
 ## 6. 必做闭环完成定义
 
-- [ ] 已独立完成前六课变式任务，并能解释调用、重试、校验与评分的职责边界。
+- [ ] 已独立完成前七课变式任务，并能解释调用、重试、校验、评分与 HTTP 层的职责边界。
 - [ ] 关键覆盖矩阵有评分规则、冻结留出集、预先登记的质量门槛和失败分析。
 - [ ] API 有请求、响应、错误契约及离线回归，不要求密钥才能运行程序测试。
 - [ ] 从新环境能复现安装、本地容器启动、健康检查和显式启用的真实冒烟。
