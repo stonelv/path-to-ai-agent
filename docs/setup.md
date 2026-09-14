@@ -194,6 +194,19 @@ Invoke-RestMethod http://127.0.0.1:8000/v1/extractions `
 错误响应区分请求校验、未就绪、容量、认证、限流、超时、供应商不可用和非法模型输出，
 但不返回供应商原始错误或模型正文。完整练习见[第 7 课](../month-01-llm-foundations/lessons/07-fastapi-service.md)。
 
+### Docker 本地运行
+
+在第一月项目目录执行：
+
+```powershell
+docker build -t baggage-extractor:local .
+docker run --rm --env-file .env -p 127.0.0.1:8000:8000 baggage-extractor:local
+```
+
+镜像使用 Python 3.13 slim 和非 root 用户，`.env` 不进入构建上下文，运行时通过
+`--env-file` 注入。容器健康检查访问 `/health`，仍需单独请求 `/ready` 验证配置已加载。
+只绑定本机回环地址；当前服务没有认证，不得直接发布到公网。
+
 ### 真实模型固定评估
 
 先完成[第 6 课](../month-01-llm-foundations/lessons/06-fixed-evaluation.md)的离线评分练习，

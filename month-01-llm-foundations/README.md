@@ -91,9 +91,10 @@ JSON Schema 从[模型代码](./src/baggage_extractor/models.py)生成，不手�
 | [api](./src/baggage_extractor/api) | FastAPI 生命周期、HTTP 契约、错误映射、请求 ID 与并发门禁 |
 | [main.py](./src/baggage_extractor/main.py)、[experiments.py](./src/baggage_extractor/experiments.py)、[telemetry.py](./src/baggage_extractor/telemetry.py) | 实验编排、案例与计时 |
 | [tests](./tests) | 对应职责的离线回归 |
+| [Dockerfile](./Dockerfile)、[.dockerignore](./.dockerignore) | 非 root 本地容器入口与构建上下文边界 |
 
 运行依赖和开发工具以[项目配置](./pyproject.toml)为准。当前使用 Python 3.13、HTTPX、
-Pydantic、FastAPI、Uvicorn、pytest 和 Ruff；Docker 在实现部署时再引入。
+Pydantic、FastAPI、Uvicorn、pytest 和 Ruff；已提供 Dockerfile，但当前维护环境尚未实机验证。
 固定数据见[评估目录](./evals)，不提前创建空的部署文件，也不预装尚未使用的框架。
 
 ## 4. 建议里程碑
@@ -106,13 +107,14 @@ Pydantic、FastAPI、Uvicorn、pytest 和 Ruff；Docker 在实现部署时再引
 | 第 1 周：可靠调用 | 第 1～3 课；配置、契约、异步、错误与重试 | 离线测试和调用路径解释；真实观察可选 |
 | 第 2 周：结构化输出与评估 | 第 4～6 课；Schema、提取 CLI、固定数据和评分器 | 变式测试、字段解释、开发/留出划分和质量报告 |
 | 第 3 周：API | 第 7 课；`POST /v1/extractions`、`GET /health`、`GET /ready`、错误契约与并发门禁 | 成功、参数错误、模型失败、请求 ID 和并发的 API Stub 测试 |
-| 第 4 周：部署与交付（规划） | Docker、运行指标、认证/限流边界和故障演练 | 本地部署复现、冻结评估报告和交付说明 |
+| 第 4 周：部署与交付（部分完成） | Docker 实机验证、运行指标、认证/限流边界和故障演练 | 本地部署复现、冻结评估报告和交付说明 |
 
 API 第一版接收 `text`，复用 20,000 字符上限并提供明确的错误 Schema。
 将认证失败、限流、超时、非法输出与内部错误分开，不将所有失败转成空结果。
 日志不默认记录原文；逐步补齐 Prompt/Schema 版本、Token、重试次数与关联 ID。
 容器使用非 root 用户、环境变量注入配置，并验证健康与就绪状态。
-当前 API 仅用于本地学习与受控验证，尚无认证、分布式限流或容器部署，勿裸露到公网。
+当前 API 仅用于本地学习与受控验证，尚无认证、分布式限流或经过实机验证的容器部署，勿裸露到公网。
+第一月交付证据见[项目报告](./docs/project-report.md)和[FastAPI 协作复盘](./docs/fastapi-collaboration-review.md)。
 
 ## 5. 评估数据覆盖
 
