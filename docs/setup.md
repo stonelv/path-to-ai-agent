@@ -1,6 +1,19 @@
 # 环境与运行指南
 
-[返回入门导航](./start-here.md)
+[返回首页](../README.md) · [开始学习](../month-01-llm-foundations/lessons/README.md)
+
+## 前置知识自检
+
+需要会基本编程、Git、HTTP、JSON 和自动化测试，不要求机器学习背景。围绕当前任务按需补课：
+
+| 自检 | 不熟悉时的入口 |
+| --- | --- |
+| 创建分支、查看 diff、运行测试 | [第 1 课：工程初始化](../month-01-llm-foundations/lessons/01-project-setup.md) |
+| 理解 HTTP 状态码、JSON 与环境变量 | [第 2 课：模型调用](../month-01-llm-foundations/lessons/02-model-calls.md) |
+| 阅读类型标注、dataclass 与 Protocol | [Python 官方教程](https://docs.python.org/3.13/tutorial/)与[请求契约](../month-01-llm-foundations/src/baggage_extractor/providers/base.py) |
+| 理解 async/await 与异常传播 | [asyncio 文档](https://docs.python.org/3.13/library/asyncio.html)与[第 3 课](../month-01-llm-foundations/lessons/03-error-handling.md) |
+
+测试语法可参考 [pytest 入门](https://docs.pytest.org/en/stable/getting-started.html)，无需先通读所有资料。
 
 ## 运行约定
 
@@ -52,7 +65,7 @@ python3.13 -m venv .venv
 这些结果证明当前参考程序的已测行为，不证明模型提取准确率、供应商可用性或部署能力。
 不要执行文本实验、提取 CLI 或评估 `run` 子命令来做离线验证：它们都会调用真实模型。
 评估 `score` 子命令只读取本地数据与预测，可以离线执行。
-每次提交报告实际命令与结果，不把[历史验证记录](../month-01-llm-foundations/PROGRESS.md)的测试数量当作当前基准。
+每次提交报告实际命令与结果，不把历史报告的测试数量当作当前基准。
 
 ## 可选：真实模型调用
 
@@ -216,7 +229,9 @@ docker run --rm --env-file .env -p 127.0.0.1:8000:8000 baggage-extractor:local
 案例数 × (MODEL_MAX_RETRIES + 1)
 ```
 
-默认留出集有 6 条案例、默认重试 2 次，因此最多 18 次：
+以下命令使用 v1 原留出集做回归。该集合已用于 Prompt 调优，不再是独立质量验证集，
+具体见[数据用途与限制](../month-01-llm-foundations/evals/README.md#当前用途与限制)。
+6 条案例、默认重试 2 次，因此最多 18 次：
 
 ```powershell
 .\.venv\Scripts\python.exe -m baggage_extractor.evaluation.cli run `
@@ -234,7 +249,8 @@ macOS / Linux 使用相同参数和 `/` 路径分隔符。配置或数据数量�
 报告包含模型配置名称、Prompt、领域 Schema、包版本、最大重试配置、逐案例和平均延迟；
 延迟包含 Provider 内部重试。
 当前不采集 Token、费用、请求 ID、实际响应模型或重试次数，这些指标应标为“未采集”，不能填 0。
-运行前在供应商侧设置预算，结束后人工检查全部失败和成功抽样，再决定是否保存为基线。
+运行前在供应商侧设置预算，结束后人工检查全部失败和成功抽样，再决定是否保存为回归基线。
+使用 v1 原留出集时报告须注明实际用途；独立质量验证需另行建立未用于调优的新留出集，不能将本次回归冒充验收通过。
 
 ## 常见问题
 
