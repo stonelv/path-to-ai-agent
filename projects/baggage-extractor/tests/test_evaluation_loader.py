@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_evaluation_models import case_data
+from evaluation_helpers import case_data
 
 from baggage_extractor.evaluation.loader import (
     EvaluationDataError,

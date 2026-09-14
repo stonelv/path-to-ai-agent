@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+from baggage_extractor.evaluation.metadata import get_dataset_metadata
 from baggage_extractor.evaluation.models import (
     CaseScore,
     EvaluationCase,
@@ -331,9 +332,14 @@ def evaluate_predictions(
             counts[1] += metric.total
     expected_rules = sum(score.expected_rules for score in scores)
     matched_rules = sum(score.matched_rules for score in scores)
+    dataset_version = next(iter(dataset_versions))
+    split = next(iter(splits))
+    metadata = get_dataset_metadata(dataset_version, split)
     return EvaluationReport(
-        dataset_version=next(iter(dataset_versions)),
-        split=next(iter(splits)),
+        dataset_version=dataset_version,
+        split=split,
+        dataset_usage=metadata.usage,
+        dataset_limitations=list(metadata.limitations),
         generated_at=generated_at or datetime.now(UTC),
         model=model,
         prompt_version=prompt_version,

@@ -223,7 +223,11 @@ async def test_ready_reports_invalid_configuration(
     def fail_settings() -> Settings:
         raise exc_info.value
 
+    def unexpected_provider(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Invalid configuration must not create a real Provider.")
+
     monkeypatch.setattr(api_app, "get_settings", fail_settings)
+    monkeypatch.setattr(api_app, "OpenAICompatibleProvider", unexpected_provider)
     app = create_app()
 
     async with api_client(app) as client:

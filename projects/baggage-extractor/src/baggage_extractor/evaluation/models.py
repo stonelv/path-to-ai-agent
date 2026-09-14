@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from baggage_extractor.models import BaggageRule, ExtractionResult
 
 EVALUATION_SCHEMA_VERSION = "1.0"
+REPORT_SCHEMA_VERSION = "1.1"
+UNVERIFIED_DATASET_LIMITATION = (
+    "Dataset usage and tuning history have not been verified; "
+    "the split label does not establish independent validation."
+)
 NonBlankText = Annotated[str, Field(min_length=1, pattern=r".*\S.*")]
 CaseId = Annotated[str, Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 NonNegativeCount = Annotated[int, Field(ge=0)]
@@ -17,6 +22,12 @@ Latency = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 class DatasetSplit(StrEnum):
     DEV = "dev"
     HOLDOUT = "holdout"
+
+
+class DatasetUsage(StrEnum):
+    DEVELOPMENT = "development"
+    REGRESSION = "regression"
+    UNVERIFIED = "unverified"
 
 
 class PredictionStatus(StrEnum):
@@ -126,9 +137,13 @@ class CaseScore(BaseModel):
 class EvaluationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = EVALUATION_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1"] = REPORT_SCHEMA_VERSION
     dataset_version: NonBlankText
     split: DatasetSplit
+    dataset_usage: DatasetUsage = DatasetUsage.UNVERIFIED
+    dataset_limitations: list[NonBlankText] = Field(
+        default_factory=lambda: [UNVERIFIED_DATASET_LIMITATION]
+    )
     generated_at: datetime
     model: NonBlankText | None = None
     prompt_version: NonBlankText | None = None

@@ -3,11 +3,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from test_evaluation_models import case_data
+from evaluation_helpers import case_data
 
 from baggage_extractor.evaluation.loader import load_cases
 from baggage_extractor.evaluation.models import (
+    DatasetUsage,
     EvaluationCase,
+    EvaluationReport,
     PredictionRecord,
     PredictionStatus,
 )
@@ -222,3 +224,58 @@ def test_course_gold_data_calibrates_to_full_score(split: str) -> None:
     assert report.missing_rules == 0
     assert report.unsupported_rules == 0
     assert report.unsupported_values == 0
+
+
+@pytest.mark.parametrize(
+    ("version", "split", "usage"),
+    [
+        ("baggage-eval-v1", "dev", DatasetUsage.DEVELOPMENT),
+        ("baggage-eval-v1", "holdout", DatasetUsage.REGRESSION),
+        ("unregistered-v2", "holdout", DatasetUsage.UNVERIFIED),
+        ("unregistered-v2", "dev", DatasetUsage.UNVERIFIED),
+    ],
+)
+def test_report_declares_dataset_usage_without_inferring_independence(
+    version: str, split: str, usage: DatasetUsage
+) -> None:
+    case = make_case(dataset_version=version, split=split)
+
+    report = evaluate_predictions([case], [successful_prediction(case)])
+
+    assert report.schema_version == "1.1"
+    assert report.dataset_usage is usage
+    assert report.dataset_limitations
+    assert "independent validation" in report.dataset_limitations[0]
+    assert report.exact_match_rate == 1
+    restored = EvaluationReport.model_validate_json(report.model_dump_json())
+    assert restored == report
+
+
+def test_legacy_report_loads_with_explicitly_unverified_usage() -> None:
+    case = make_case(split="holdout")
+    report = evaluate_predictions([case], [successful_prediction(case)])
+    legacy = report.model_dump(mode="json")
+    legacy["schema_version"] = "1.0"
+    del legacy["dataset_usage"]
+    del legacy["dataset_limitations"]
+
+    restored = EvaluationReport.model_validate(legacy)
+
+    assert restored.schema_version == "1.0"
+    assert restored.dataset_usage is DatasetUsage.UNVERIFIED
+    assert "have not been verified" in restored.dataset_limitations[0]
+    assert restored.split == "holdout"
+    assert restored.exact_match_rate == 1
+
+
+def test_shared_case_data_returns_independent_nested_objects() -> None:
+    first_data = case_data()
+    second_data = case_data()
+    assert first_data is not second_data
+    assert first_data["expected"] is not second_data["expected"]
+    first = EvaluationCase.model_validate(first_data)
+    first.expected.free_baggage_rules[0].pieces = 99
+
+    second = EvaluationCase.model_validate(second_data)
+
+    assert second.expected.free_baggage_rules[0].pieces == 1

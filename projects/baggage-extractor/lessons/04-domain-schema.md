@@ -55,7 +55,7 @@ JSON 可解析不代表能用于业务。调用模型前先确定必填键、规
 3. 将一个合法规则的 JSON 对象放入另一个规则数组，观察结构校验仍可能通过；
    在记录中解释为何还需要对照原文做质量评估，不据此修改 Schema 来伪造语义识别。
 
-记录使用[学习模板](../../templates/learning-log.md)，保留命令、结果和解释。
+记录使用[学习模板](../../../templates/learning-log.md)，保留命令、结果和解释。
 
 ### 4. 检查生成的 JSON Schema
 
@@ -70,7 +70,7 @@ JSON 可解析不代表能用于业务。调用模型前先确定必填键、规
 
 ## 运行与预期
 
-在第一月项目目录执行，安装方式见[环境指南](../../docs/setup.md)。
+在 `projects/baggage-extractor` 项目目录执行，安装方式见[环境指南](../../../docs/setup.md)。
 
 Windows / PowerShell：
 

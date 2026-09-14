@@ -67,9 +67,18 @@ API 返回稳定的 `error.code`、安全消息和请求 ID：
 
 在项目目录执行：
 
+Windows / PowerShell：
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests\test_api.py tests\test_config.py
 .\.venv\Scripts\python.exe -m ruff check .
+```
+
+macOS / Linux：
+
+```bash
+.venv/bin/python -m pytest tests/test_api.py tests/test_config.py
+.venv/bin/python -m ruff check .
 ```
 
 测试通过 Stub 覆盖健康、就绪、成功提取、输入校验、Provider 错误、非法模型输出、请求 ID
@@ -80,11 +89,14 @@ API 返回稳定的 `error.code`、安全消息和请求 ID：
 1. 提供含空格的请求 ID，证明服务生成新 ID，且响应头和错误正文一致。
 2. 让 Stub 抛出模型超时，证明返回 504 而不是空提取结果。
 3. 阻塞第一个请求并设置并发为 1，证明第二个请求在等待超时后返回 503。
-4. 删除 `.env` 中一个必填模型字段，证明 `/health` 为 200、`/ready` 为 503，且未调用模型。
+4. 参照[未就绪测试](../tests/test_api.py)隔离配置：使用 `monkeypatch` 临时移除 `MODEL_*` 环境变量，
+   通过 `Settings(_env_file=None)` 获得缺少配置的 `ValidationError`，再替换 API 模块的 `get_settings`
+   使其抛出该错误。证明 `/health` 为 200、`/ready` 为 503；同时替换 Provider 构造器为抛出
+   `AssertionError` 的函数，证明未创建真实 Provider。不要修改或删除自己的 `.env`，也不更改永久环境变量。
 
 ## 可选真实冒烟
 
-按[环境指南](../../docs/setup.md#fastapi-服务)只绑定 `127.0.0.1`。先请求健康和就绪接口，
+按[环境指南](../../../docs/setup.md#fastapi-服务)只绑定 `127.0.0.1`。先请求健康和就绪接口，
 再使用无私人信息的合成文本调用一次提取接口。该请求会产生外部传输和潜在费用。
 
 ## 验收与下一步
@@ -95,7 +107,7 @@ API 返回稳定的 `error.code`、安全消息和请求 ID：
 - [ ] 能说明单进程并发门禁与生产级限流的差异。
 - [ ] 完成离线 API 测试，并将真实模型冒烟标记为已运行或未验证。
 
-完成本课后，按[学习推进条件](../../docs/assessment.md#学习推进与项目交付)核对证据，可进入模块 03 的概念预习
+完成本课后，按[学习推进条件](../../../docs/assessment.md#学习推进与项目交付)核对证据，可进入模块 03 的概念预习
 （该模块尚未发布教程），不必等待真实模型实验或 Docker 验证。
-第一月项目的基础部署与交付另行验收；仓库提供 Dockerfile，但认证、跨进程限流、
+本项目的基础部署与交付另行验收；仓库提供 Dockerfile，但认证、跨进程限流、
 故障演练以及当前维护环境的 Docker 实机验证仍未完成。

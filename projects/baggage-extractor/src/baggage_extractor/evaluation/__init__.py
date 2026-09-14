@@ -8,6 +8,7 @@ from baggage_extractor.evaluation.loader import (
 from baggage_extractor.evaluation.models import (
     CaseScore,
     DatasetSplit,
+    DatasetUsage,
     EvaluationCase,
     EvaluationReport,
     PredictionRecord,
@@ -22,6 +23,7 @@ from baggage_extractor.evaluation.scorer import (
 __all__ = [
     "CaseScore",
     "DatasetSplit",
+    "DatasetUsage",
     "EvaluationCase",
     "EvaluationDataError",
     "EvaluationReport",

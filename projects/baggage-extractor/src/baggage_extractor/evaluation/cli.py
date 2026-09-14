@@ -19,6 +19,7 @@ from baggage_extractor.evaluation.loader import (
     write_jsonl,
     write_report,
 )
+from baggage_extractor.evaluation.metadata import get_dataset_metadata
 from baggage_extractor.evaluation.models import (
     EvaluationCase,
     PredictionRecord,
@@ -35,6 +36,10 @@ from baggage_extractor.providers import ModelProviderError, OpenAICompatibleProv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_HOLDOUT_DATASET = PROJECT_ROOT / "evals" / "datasets" / "v1" / "holdout.jsonl"
+DATASET_HELP = (
+    "Dataset JSONL path; defaults to the v1 original holdout, now regression-only. "
+    "The split label does not establish independent validation."
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,7 +52,9 @@ def build_parser() -> argparse.ArgumentParser:
         "score",
         help="Score saved predictions without model or network access.",
     )
-    score_parser.add_argument("--dataset", type=Path, default=DEFAULT_HOLDOUT_DATASET)
+    score_parser.add_argument(
+        "--dataset", type=Path, default=DEFAULT_HOLDOUT_DATASET, help=DATASET_HELP
+    )
     score_parser.add_argument("--predictions", type=Path, required=True)
     score_parser.add_argument("--output", type=Path)
     score_parser.add_argument("--model")
@@ -61,7 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="Call the configured real model, save predictions, then score them.",
     )
-    run_parser.add_argument("--dataset", type=Path, default=DEFAULT_HOLDOUT_DATASET)
+    run_parser.add_argument(
+        "--dataset", type=Path, default=DEFAULT_HOLDOUT_DATASET, help=DATASET_HELP
+    )
     run_parser.add_argument("--predictions-output", type=Path, required=True)
     run_parser.add_argument("--report-output", type=Path, required=True)
     run_parser.add_argument(
@@ -77,6 +86,15 @@ def build_parser() -> argparse.ArgumentParser:
 def _print_configuration_error(error: ValidationError) -> None:
     fields = sorted({str(detail["loc"][0]) for detail in error.errors()})
     print(f"Invalid model configuration: {', '.join(fields)}.", file=sys.stderr)
+
+
+def _print_dataset_notice(case: EvaluationCase) -> None:
+    metadata = get_dataset_metadata(case.dataset_version, case.split)
+    print(
+        f"Dataset {case.dataset_version} / {case.split}: usage={metadata.usage}. "
+        + " ".join(metadata.limitations),
+        file=sys.stderr,
+    )
 
 
 def _require_distinct_paths(named_paths: dict[str, Path]) -> None:
@@ -152,6 +170,7 @@ def _score_command(args: argparse.Namespace) -> int:
         )
     cases = load_cases(args.dataset)
     predictions = load_predictions(args.predictions)
+    _print_dataset_notice(cases[0])
     report = evaluate_predictions(
         cases,
         predictions,
@@ -193,6 +212,7 @@ def _run_command(args: argparse.Namespace) -> int:
         )
         return 2
 
+    _print_dataset_notice(cases[0])
     predictions = asyncio.run(_run_real_evaluation(cases, settings))
     report = evaluate_predictions(
         cases,

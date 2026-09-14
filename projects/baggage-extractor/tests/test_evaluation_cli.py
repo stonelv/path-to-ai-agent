@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_evaluation_models import case_data
+from evaluation_helpers import case_data
 
 from baggage_extractor.config import Settings
 from baggage_extractor.evaluation.cli import main
@@ -105,6 +105,82 @@ def test_course_demo_metrics_match_lesson(capsys: pytest.CaptureFixture[str]) ->
         "unsupported_rules": 1,
         "unsupported_values": 4,
     }
+
+
+@pytest.mark.parametrize(
+    ("version", "filename", "usage"),
+    [
+        ("baggage-eval-v1", "renamed.jsonl", "regression"),
+        ("unknown-v2", "holdout.jsonl", "unverified"),
+    ],
+)
+def test_score_reports_usage_from_declared_version_not_filename(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    version: str,
+    filename: str,
+    usage: str,
+) -> None:
+    data = case_data()
+    data.update(dataset_version=version, split="holdout")
+    case = EvaluationCase.model_validate(data)
+    dataset = tmp_path / filename
+    predictions = tmp_path / "predictions.jsonl"
+    output = tmp_path / "report.json"
+    write_jsonl(dataset, [case])
+    write_jsonl(
+        predictions,
+        [PredictionRecord(case_id=case.id, status="success", actual=case.expected)],
+    )
+
+    exit_code = main(
+        [
+            "score",
+            "--dataset",
+            str(dataset),
+            "--predictions",
+            str(predictions),
+            "--output",
+            str(output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 0
+    assert report == json.loads(output.read_text(encoding="utf-8"))
+    assert report["schema_version"] == "1.1"
+    assert report["split"] == "holdout"
+    assert report["dataset_usage"] == usage
+    assert report["dataset_limitations"]
+    assert f"usage={usage}" in captured.err
+    assert "independent validation" in captured.err
+
+
+def test_default_dataset_remains_regression_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from baggage_extractor.evaluation.cli import DEFAULT_HOLDOUT_DATASET
+    from baggage_extractor.evaluation.loader import load_cases
+
+    cases = load_cases(DEFAULT_HOLDOUT_DATASET)
+    predictions = tmp_path / "predictions.jsonl"
+    write_jsonl(
+        predictions,
+        [
+            PredictionRecord(case_id=case.id, status="success", actual=case.expected)
+            for case in cases
+        ],
+    )
+
+    assert main(["score", "--predictions", str(predictions)]) == 0
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["dataset_usage"] == "regression"
+    assert "usage=regression" in captured.err
+    assert report["case_count"] == 6
+    assert report["exact_match_rate"] == 1
 
 
 def test_score_command_reports_data_error(
@@ -235,15 +311,21 @@ def test_run_command_refuses_existing_output_before_loading_configuration(
     assert "Refusing to overwrite" in captured.err
 
 
+@pytest.mark.parametrize(("split", "usage"), [("dev", "development"), ("holdout", "regression")])
 def test_run_command_saves_predictions_and_versioned_report_without_real_network(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    split: str,
+    usage: str,
 ) -> None:
     dataset = tmp_path / "dev.jsonl"
     predictions_path = tmp_path / "runs" / "predictions.jsonl"
     report_path = tmp_path / "runs" / "report.json"
-    case = create_dataset(dataset)
+    data = case_data()
+    data["split"] = split
+    case = EvaluationCase.model_validate(data)
+    write_jsonl(dataset, [case])
     settings = Settings(
         model_api_key="test-key",
         model_name="test-model",
@@ -255,6 +337,7 @@ def test_run_command_saves_predictions_and_versioned_report_without_real_network
     class StubContextProvider:
         def __init__(self, active_settings: Settings) -> None:
             assert active_settings is settings
+            assert f"usage={usage}" in capsys.readouterr().err
 
         async def __aenter__(self) -> "StubContextProvider":
             return self
@@ -296,6 +379,9 @@ def test_run_command_saves_predictions_and_versioned_report_without_real_network
     assert report["domain_schema_version"] == "baggage-result-v1"
     assert report["package_version"] == "0.1.0"
     assert report["model_max_retries"] == 2
+    assert report["schema_version"] == "1.1"
+    assert report["dataset_usage"] == usage
+    assert report["dataset_limitations"]
 
 
 async def test_run_cases_preserves_success_and_known_failure() -> None:

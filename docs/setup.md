@@ -1,6 +1,6 @@
 # 环境与运行指南
 
-[返回首页](../README.md) · [开始学习](../month-01-llm-foundations/lessons/README.md)
+[返回首页](../README.md) · [开始学习](../projects/baggage-extractor/lessons/README.md)
 
 ## 前置知识自检
 
@@ -8,17 +8,17 @@
 
 | 自检 | 不熟悉时的入口 |
 | --- | --- |
-| 创建分支、查看 diff、运行测试 | [第 1 课：工程初始化](../month-01-llm-foundations/lessons/01-project-setup.md) |
-| 理解 HTTP 状态码、JSON 与环境变量 | [第 2 课：模型调用](../month-01-llm-foundations/lessons/02-model-calls.md) |
-| 阅读类型标注、dataclass 与 Protocol | [Python 官方教程](https://docs.python.org/3.13/tutorial/)与[请求契约](../month-01-llm-foundations/src/baggage_extractor/providers/base.py) |
-| 理解 async/await 与异常传播 | [asyncio 文档](https://docs.python.org/3.13/library/asyncio.html)与[第 3 课](../month-01-llm-foundations/lessons/03-error-handling.md) |
+| 创建分支、查看 diff、运行测试 | [第 1 课：工程初始化](../projects/baggage-extractor/lessons/01-project-setup.md) |
+| 理解 HTTP 状态码、JSON 与环境变量 | [第 2 课：模型调用](../projects/baggage-extractor/lessons/02-model-calls.md) |
+| 阅读类型标注、dataclass 与 Protocol | [Python 官方教程](https://docs.python.org/3.13/tutorial/)与[请求契约](../projects/baggage-extractor/src/baggage_extractor/providers/base.py) |
+| 理解 async/await 与异常传播 | [asyncio 文档](https://docs.python.org/3.13/library/asyncio.html)与[第 3 课](../projects/baggage-extractor/lessons/03-error-handling.md) |
 
 测试语法可参考 [pytest 入门](https://docs.pytest.org/en/stable/getting-started.html)，无需先通读所有资料。
 
 ## 运行约定
 
 - 教学基线：**Python 3.13**。项目元数据要求 `>=3.13`，不表示更高版本都已验证。
-- 以下命令均在 `month-01-llm-foundations` 项目目录执行。
+- 除明确标注从仓库根目录开始的命令外，以下命令均在 `projects/baggage-extractor` 项目目录执行。
 - 使用虚拟环境解释器的完整相对路径，不要求激活环境，也无需修改 PowerShell 执行策略。
 - 本轮维护验证环境为 Windows / Python 3.13；macOS/Linux 命令供对应平台使用，尚未在本轮实机验证。
 - 当前依赖由 `pyproject.toml` 的版本范围管理，尚无锁文件；不同安装日期可能解析出不同版本。报告问题时附依赖版本。
@@ -28,7 +28,7 @@
 从仓库根目录执行：
 
 ```powershell
-Set-Location .\month-01-llm-foundations
+Set-Location .\projects\baggage-extractor
 py -3.13 --version
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
@@ -37,6 +37,8 @@ py -3.13 -m venv .venv
 ```
 
 如果已有此项目的可用虚拟环境，直接使用它，无需重建或重复安装。
+若项目目录发生迁移，旧虚拟环境和 editable 安装可能包含绝对路径，应在新位置重新创建 `.venv` 并安装项目，
+不要直接搬用旧环境。保留自己的 `.env` 和 `evals/runs/`，并在编辑器中重新选择新位置的 Python 解释器。
 若没有 `py`，先安装 Python 3.13，或确认 `python --version` 为 3.13 后，用 `python -m venv .venv` 创建环境。
 
 ## macOS / Linux
@@ -44,7 +46,7 @@ py -3.13 -m venv .venv
 从仓库根目录执行：
 
 ```bash
-cd month-01-llm-foundations
+cd projects/baggage-extractor
 python3.13 --version
 python3.13 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
@@ -75,7 +77,7 @@ python3.13 -m venv .venv
 
 | 入口 | 发出的内容 | 默认最大 HTTP 尝试数 | 输出 |
 | --- | --- | --- | --- |
-| `baggage_extractor.main` | 三组[实验文本](../month-01-llm-foundations/src/baggage_extractor/experiments.py) | 整轮 9 次 | 未经领域校验的文本与调用元信息 |
+| `baggage_extractor.main` | 三组[实验文本](../projects/baggage-extractor/src/baggage_extractor/experiments.py) | 整轮 9 次 | 未经领域校验的文本与调用元信息 |
 | `baggage_extractor.extract_cli` | 位置参数中的单段政策 | 每次执行 3 次 | 通过领域 Schema 的 JSON |
 | `baggage_extractor.evaluation.cli run` | 指定固定数据文件的全部案例 | 案例数 × 3 | 保存逐案例预测和汇总质量报告 |
 | `POST /v1/extractions` | 请求正文中的单段政策 | 每个请求 3 次 | 带请求 ID、通过领域 Schema 的 JSON |
@@ -169,7 +171,7 @@ macOS / Linux：
 .venv/bin/python -m baggage_extractor.extract_cli "经济舱可免费托运1件23kg行李。"
 ```
 
-成功时 stdout 只输出符合[领域契约](../month-01-llm-foundations/docs/schema.md)的 JSON，
+成功时 stdout 只输出符合[领域契约](../projects/baggage-extractor/docs/schema.md)的 JSON，
 仍需人工对照原文检查事实。失败时返回非零退出码；配置错误只提示字段名，
 输入、解析、领域和 Provider 错误写入 stderr，不返回伪造的空规则。
 提取 CLI 当前不输出计时、Token 或费用，不要把文本实验的元信息能力算在它上面。
@@ -205,11 +207,11 @@ Invoke-RestMethod http://127.0.0.1:8000/v1/extractions `
 单进程通过 `API_MAX_CONCURRENT_REQUESTS` 限制同时执行的提取数。等待超过
 `API_ACQUIRE_TIMEOUT_SECONDS` 时返回 503；这不是跨进程限流、认证或公网防护。
 错误响应区分请求校验、未就绪、容量、认证、限流、超时、供应商不可用和非法模型输出，
-但不返回供应商原始错误或模型正文。完整练习见[第 7 课](../month-01-llm-foundations/lessons/07-fastapi-service.md)。
+但不返回供应商原始错误或模型正文。完整练习见[第 7 课](../projects/baggage-extractor/lessons/07-fastapi-service.md)。
 
 ### Docker 本地运行
 
-在第一月项目目录执行：
+在 `projects/baggage-extractor` 项目目录执行：
 
 ```powershell
 docker build -t baggage-extractor:local .
@@ -222,7 +224,7 @@ docker run --rm --env-file .env -p 127.0.0.1:8000:8000 baggage-extractor:local
 
 ### 真实模型固定评估
 
-先完成[第 6 课](../month-01-llm-foundations/lessons/06-fixed-evaluation.md)的离线评分练习，
+先完成[第 6 课](../projects/baggage-extractor/lessons/06-fixed-evaluation.md)的离线评分练习，
 再决定是否运行真实模型。运行器要求显式确认最坏 HTTP 请求数：
 
 ```text
@@ -230,7 +232,7 @@ docker run --rm --env-file .env -p 127.0.0.1:8000:8000 baggage-extractor:local
 ```
 
 以下命令使用 v1 原留出集做回归。该集合已用于 Prompt 调优，不再是独立质量验证集，
-具体见[数据用途与限制](../month-01-llm-foundations/evals/README.md#当前用途与限制)。
+具体见[数据用途与限制](../projects/baggage-extractor/evals/README.md#当前用途与限制)。
 6 条案例、默认重试 2 次，因此最多 18 次：
 
 ```powershell
@@ -248,6 +250,10 @@ macOS / Linux 使用相同参数和 `/` 路径分隔符。配置或数据数量�
 已知的 Provider、JSON 和领域错误会保存为失败预测并继续下一案例，不能从报告分母中删除。
 报告包含模型配置名称、Prompt、领域 Schema、包版本、最大重试配置、逐案例和平均延迟；
 延迟包含 Provider 内部重试。
+新报告版本为 `1.1`，包含 `dataset_usage` 和 `dataset_limitations`；旧数据文件与命令保持兼容。
+CLI 在 stderr 提示用途与限制，真实评估在创建 Provider 前提示；stdout 仍是 JSON。
+省略 `--dataset` 仍使用 v1 原留出集，其用途明确为 `regression`，不是独立验收。
+未登记的数据用途为 `unverified`，不能仅凭 `holdout` 标签认定独立性，详见[报告元信息](../projects/baggage-extractor/evals/README.md#报告中的用途元信息)。
 当前不采集 Token、费用、请求 ID、实际响应模型或重试次数，这些指标应标为“未采集”，不能填 0。
 运行前在供应商侧设置预算，结束后人工检查全部失败和成功抽样，再决定是否保存为回归基线。
 使用 v1 原留出集时报告须注明实际用途；独立质量验证需另行建立未用于调优的新留出集，不能将本次回归冒充验收通过。

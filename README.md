@@ -7,7 +7,7 @@
 ## 从这里开始
 
 1. **准备环境**：按[环境指南](./docs/setup.md)完成无 API Key 的离线验证。
-2. **开始实践**：进入[第 1～7 课](./month-01-llm-foundations/lessons/README.md)，先预测行为、完成变式，再对照参考实现。
+2. **开始实践**：进入[第 1～7 课](./projects/baggage-extractor/lessons/README.md)，先预测行为、完成变式，再对照参考实现。
 3. **验证掌握**：用[验收指南](./docs/assessment.md#学习推进与项目交付)核对学习证据，判断是否具备进入下一模块的能力。
 
 想先了解全貌，阅读[课程路线](./docs/roadmap.md)。不必先读完所有规划或完成一整年的准备。
@@ -28,17 +28,17 @@
 
 | 模块 | 内容 | 状态与入口 |
 | --- | --- | --- |
-| 00 | 环境与 Python 工程补课 | [第 1 课](./month-01-llm-foundations/lessons/01-project-setup.md)可学习 |
-| 01 | 可靠的 LLM 调用 | [第 2～3 课](./month-01-llm-foundations/lessons/README.md)可学习；流式调用尚未实现 |
-| 02 | 结构化输出、评估与 API 交付 | [第 4～7 课](./month-01-llm-foundations/lessons/README.md)可学习 |
+| 00 | 环境与 Python 工程补课 | [第 1 课](./projects/baggage-extractor/lessons/01-project-setup.md)可学习 |
+| 01 | 可靠的 LLM 调用 | [第 2～3 课](./projects/baggage-extractor/lessons/README.md)可学习；流式调用尚未实现 |
+| 02 | 结构化输出、评估与 API 交付 | [第 4～7 课](./projects/baggage-extractor/lessons/README.md)可学习 |
 | 03 | 工具调用、单 Agent 与基础 MCP 接入 | 规划中 |
 | 04 | 上下文工程、RAG 与记忆 | 规划中 |
 | 05 | 状态与业务流程 | 规划中 |
 | 06 | MCP 服务、Skills 与系统集成 | 规划中 |
 | 07 | 生产化与综合项目 | 规划中 |
 
-目前只有[行李额提取器](./month-01-llm-foundations)已有 CLI、评估与本地 API 实现，尚无 RAG 或 Agent Loop。
-离线验证、真实模型评估和本地 API 冒烟已有[报告摘要](./month-01-llm-foundations/docs/project-report.md)，
+目前只有[行李额提取器](./projects/baggage-extractor)已有 CLI、评估与本地 API 实现，尚无 RAG 或 Agent Loop。
+离线验证、真实模型评估和本地 API 冒烟已有[报告摘要](./projects/baggage-extractor/docs/project-report.md)，
 但完整逐案例预测与机器可读评分报告尚未归档到仓库，不能仅凭摘要独立复核质量基线，也未宣称质量达标。
 Docker 已提供配置但未实机验证；模型实验和部署不阻塞后续概念与离线学习。
 
@@ -51,6 +51,14 @@ Docker 已提供配置但未实机验证；模型实验和部署不阻塞后续�
 - **AI 编程协作**：每个项目完成一次[委派、评审与验证练习](./docs/assessment.md#项目交付与-ai-编程协作)，不以生成代码数量代替理解。
 
 ## 参与与记录
+
+仓库按以下职责组织，不以月份划分学习进度：
+
+```text
+docs/                         课程路线、环境、验收与参考资料
+projects/baggage-extractor/    完整学习项目：lessons、src、tests、evals、docs
+templates/                    学习记录、实验与交付模板
+```
 
 使用[学习记录模板](./templates/learning-log.md)在自己的 Fork 中保存证据。
 改进课程前请阅读[贡献指南](./CONTRIBUTING.md)；课程写作、实验与交付模板从该页按需访问，不是入门必读。
