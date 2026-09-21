@@ -1,157 +1,133 @@
-# 项目一：航司行李额提取器
+# 项目一：可靠的 LLM 应用
 
-面向已有开发基础的学习者，通过一个小范围提取器掌握可靠模型调用、结构化输出与评估，
-对应[课程路线](../../docs/roadmap.md)的模块 00～02。它是 LLM 应用，不需要 Agent Loop。
-课程、源码、测试和评估数据放在同一项目中；项目名称不绑定月份或课程模块编号。
+[返回课表](../../README.md) · [环境准备](../../docs/setup.md)
 
-## 1. 从哪里开始
+把合成行李政策转成经过校验的数据，学习模型调用、结构化输出、评估与失败边界。
+这是 LLM 应用，不需要 Agent Loop。先完成第 01～04 课，再进入工具 Agent；
+不必先读懂整个适配器、评分器或部署代码。
 
-学习顺序和任务统一见[课程索引](./lessons/README.md)，安装与运行见[环境指南](../../docs/setup.md)。
-本页只说明项目范围、架构与交付要求；课程发布状态见[首页](../../README.md#课程状态)。
+## 范围与参考实现
 
-### 当前运行入口
+第一轮只处理中文单条规则、重量、件数与未知值。完整参考实现还支持多规则和尺寸，
+但不要求先穷尽航司业务。原文没有的事实不能补充，结构合法不等于事实正确。
+不包含 OCR、抓取、订座、收费、RAG 或 Agent；不能用于真实旅客权益判断。
 
-| 入口 | 用途 | 验证边界 |
-| --- | --- | --- |
-| pytest + Stub / HTTP Mock | 离线程序测试 | 不需要密钥，不验证模型质量 |
-| `python -m baggage_extractor.main` | 教学入口：三组文本调用实验，不是完整提取应用 | 真实请求；回答不经过领域校验 |
-| `python -m baggage_extractor.extract_cli "政策文本"` | 单段结构化提取 | 真实请求；输出通过领域校验，但不保证事实正确 |
-| `python -m baggage_extractor.evaluation.cli score ...` | 对保存的预测离线评分 | 无网络；验证评分与报告，不代表模型质量 |
-| `python -m baggage_extractor.evaluation.cli run ...` | 显式运行固定真实模型评估 | 可能计费；保存完整预测和质量报告 |
-| `python -m uvicorn baggage_extractor.api.app:app ...` | 本地 FastAPI 服务 | 健康与就绪不调用模型；提取接口会真实调用并可能计费 |
-
-上述 Python 命令需使用项目虚拟环境解释器。完整命令、供应商能力和费用边界只在
-[环境指南](../../docs/setup.md#可选真实模型调用)维护，不把真实调用当成安装检查。
-
-## 2. 项目范围
-
-### 2.1 项目名称
-
-航司行李额结构化提取器（Airline Baggage Allowance Extractor）。
-
-### 2.2 业务问题
-
-把政策文字中的免费托运行李和随身行李规则转换为可验证的数据。
-学习重点是供应商隔离、不可信输出校验和失败处理，不是穷尽所有航司业务。
-真实收费、订座或旅客权益判断不能直接依赖本教学实现。
-
-### 2.3 输入
-
-第一版主要使用无私人数据的中文合成政策。输入必须非空，当前上限为 20,000 字符。
-字符上限不是 Token 上限，也不是费用上限。
-
-### 2.4 输出
-
-字段含义、单位、空值规则与输入/输出示例统一见[领域契约](./docs/schema.md)。
-JSON Schema 从[模型代码](./src/baggage_extractor/models.py)生成，不手工维护第二份。
-格式正确不等于提取正确：原文没给航司代码就不能补出代码，明确给出件数就不能标为未知。
-
-### 2.5 第一版范围
-
-**必做闭环的目标（不等于当前已实现）：**
-
-以下是完整项目的目标，不是进入模块 03 的全部前置条件；学习推进与交付分别验收。
-
-- 提取航司信息、舱位说明和舱位代码，区分免费托运与随身行李。
-- 保留公斤重量的 kg 表达、非负整数件数、cm 尺寸和说明；未知值按领域契约表达。
-- 对结构、输入和失败路径执行确定性校验。
-- 使用小型固定评估集建立回归基线；独立质量验收另建未用于调优的留出集。提供提取 API 与本地基础部署。
-- 覆盖无关文本、缺失信息、明确零额度、多规则与超范围条件，不静默套用普通规则。
-
-**进阶扩展，不阻塞必做验收：**
-
-- 英文、儿童/会员条件、复杂票价品牌、会员叠加和政策冲突。
-- kg/lb、cm/inch 换算；保留原值和转换依据。
-- 更大评估集、流式交互、并发与成本优化。
-
-**不纳入本项目：** OCR、自动抓取、订座、超额费用计算、RAG 和多 Agent。
-不要为了达到某个数据条数或覆盖所有行业规则，长期推迟后续工具调用学习。
-
-## 3. 当前代码如何组织
-
-| 入口类型 | 调用路径 |
+| 参考入口 | 职责 |
 | --- | --- |
-| 教学文本实验 | `main → experiments → Provider → 文本与计时`；观察模型行为，不执行领域校验 |
-| 业务提取 | `extract_cli / FastAPI → BaggageExtractor → Provider → JSON 解析与领域校验`；复用 Prompt 与模型契约 |
-| 离线评分 | `evaluation.cli score → 加载案例与预测 → scorer → 报告`；不调用模型 |
-| 真实评估 | `evaluation.cli run → BaggageExtractor → 保存预测 → scorer → 报告`；显式确认请求数量 |
+| [Provider 契约](./src/baggage_extractor/providers/base.py) | 隔离业务请求与供应商 HTTP 协议 |
+| [提取器](./src/baggage_extractor/extractor.py) | 输入、结构化请求、严格 JSON 解析和领域校验 |
+| [领域约定](./docs/schema.md) | 完整字段语义、未知值与结构示例，按需查阅 |
+| [评估数据](./evals/README.md) | 数据来源、用途和独立性限制 |
+| [独立练习](./exercises/extract.py) | 待完成的提取闭环，不影响默认应用与测试 |
+| [API](./src/baggage_extractor/api/app.py) | 已有薄 HTTP 层，作为后续服务化参考 |
 
-`main` 保留既有实验命令兼容性，不是以上入口的总调度器。
+## 离线运行
 
-| 位置 | 单一职责 |
+按环境指南安装，在本项目目录执行以下 PowerShell 命令。
+macOS/Linux 使用 `.venv/bin/python`，并将文件路径的 `\` 换成 `/`。
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pytest exercises --reference
+.\.venv\Scripts\python.exe -m baggage_extractor.evaluation.cli score --dataset evals\datasets\v1\dev.jsonl --predictions evals\examples\dev-predictions-with-errors.jsonl --model scorer-demo --prompt-version not-a-model-run
+```
+
+前两个命令验证参考应用；`--reference` 用生产提取器验证同一组练习要求。
+评分示例故意含错：6 条案例、1 条失败、3 条完全匹配，完全匹配率 0.5。
+这不是模型质量基线。自己的练习用 `pytest exercises` 验证，未实现时应失败。
+
+## 可选真实模型
+
+以下命令会外发输入并可能计费；安装、普通测试和离线评分不需要运行它们。
+只使用可外发的合成文本，先在供应商侧设置预算，不提交 `.env` 或原始敏感输出。
+
+仅在 `.env` 不存在时复制配置：
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+macOS/Linux：`test -e .env || cp .env.example .env`。
+在编辑器中填写[示例配置](./.env.example)，系统环境变量优先于项目 `.env`：
+
+| 配置 | 含义 |
 | --- | --- |
-| [config.py](./src/baggage_extractor/config.py) | 加载与校验配置；密钥不进入业务结果 |
-| [providers/base.py](./src/baggage_extractor/providers/base.py) | 供应商无关的请求、响应和 Protocol |
-| [providers/openai_compatible.py](./src/baggage_extractor/providers/openai_compatible.py) | HTTP、响应协议、错误映射和有限重试 |
-| [models.py](./src/baggage_extractor/models.py) | 领域类型与 JSON Schema，不依赖模型或网络 |
-| [prompts.py](./src/baggage_extractor/prompts.py) | 版本化提取指令 |
-| [extractor.py](./src/baggage_extractor/extractor.py) | 输入校验、结构化请求、JSON 解析和领域校验 |
-| [extract_cli.py](./src/baggage_extractor/extract_cli.py) | 参数、输出、退出码；可注入测试 Provider |
-| [evaluation](./src/baggage_extractor/evaluation) | 案例/预测契约、JSONL 加载、确定性评分和评估 CLI |
-| [api](./src/baggage_extractor/api) | FastAPI 生命周期、HTTP 契约、错误映射、请求 ID 与并发门禁 |
-| [main.py](./src/baggage_extractor/main.py)、[experiments.py](./src/baggage_extractor/experiments.py)、[telemetry.py](./src/baggage_extractor/telemetry.py) | 实验编排、案例与计时 |
-| [tests](./tests) | 对应职责的离线回归 |
-| [Dockerfile](./Dockerfile)、[.dockerignore](.dockerignore) | 非 root 本地容器入口与构建上下文边界 |
+| `MODEL_API_KEY` / `MODEL_NAME` | 自己的有效密钥与模型标识，不照抄历史记录 |
+| `MODEL_BASE_URL` | HTTP(S) 基础 URL；程序追加 `/chat/completions`，需要 `/v1` 时包含它；不允许内嵌账号密码、查询或片段 |
+| `MODEL_STRUCTURED_OUTPUT_MODE` | 默认 `json_schema`；服务只支持 JSON Output 时显式改为 `json_object`，不自动降级 |
+| `MODEL_CONNECT_TIMEOUT_SECONDS` / `MODEL_READ_TIMEOUT_SECONDS` | 正的有限数，默认 10 / 30 秒，不是端到端总时限 |
+| `MODEL_MAX_RETRIES` / `MODEL_RETRY_BACKOFF_SECONDS` | 额外重试 0～5 次，默认 2；首次退避 0～30 秒，默认 0.5 |
+| `API_MAX_CONCURRENT_REQUESTS` / `API_ACQUIRE_TIMEOUT_SECONDS` | 单进程并发 1～100，默认 4；等待名额大于 0 且不超过 60 秒，默认 1 |
 
-运行依赖和开发工具以[项目配置](./pyproject.toml)为准。当前使用 Python 3.13、HTTPX、
-Pydantic、FastAPI、Uvicorn、pytest 和 Ruff；已提供 Dockerfile，但当前维护环境尚未实机验证。
-固定数据见[评估目录](./evals)，不提前创建空的部署文件，也不预装尚未使用的框架。
+适配器使用 Bearer 认证，要求返回 `model` 与非空 `choices[0].message.content`。
+`json_schema` 模式要求服务支持严格 Schema；`json_object` 模式仍有本地结构校验，但不把 Schema 发给服务端。
+如果提供 `finish_reason`，只接受 `stop`；拒绝和截断不是成功。结束原因缺失时不能据此检测截断。
+当前适配器不支持工具调用或流式响应；`LOG_LEVEL` 尚未接入配置。
 
-## 4. 运行与已知限制
+### 单段提取
 
-API 使用现有提取器、稳定错误契约、请求 ID 与单进程并发门禁；日志不默认记录原文。
-当前仅用于本地受控验证，尚无认证、分布式限流或费用熔断，勿裸露到公网。
-容器配置使用非 root 用户和环境变量注入，但尚未实机验证；Token 和实际重试次数尚未采集。
-历史运行与未完成项见[项目报告](./docs/project-report.md)，协作证据见[FastAPI 复盘](./docs/fastapi-collaboration-review.md)。
+```powershell
+.\.venv\Scripts\python.exe -m baggage_extractor.extract_cli "经济舱可免费托运1件23kg行李。"
+```
 
-## 5. 评估数据覆盖
+成功输出 JSON，失败向 stderr 写错误且返回非零退出码。输入上限 20,000 字符，
+不是 Token 或费用上限。默认最多 3 次 HTTP 尝试；仍须人工核对字段事实。
+当前提取请求未指定输出 Token 上限，没有自动费用熔断，也未采集 Token/费用。
 
-当前数据包含 6 条开发案例和 6 条原留出案例，均为中文合成文本，仅用于小型教学与回归，
-不具统计代表性。实际用途见[数据说明](./evals/README.md#当前用途与限制)，覆盖目标如下：
+旧文本实验入口 `python -m baggage_extractor.main` 保留兼容：运行三组案例，默认最多 9 次 HTTP 尝试，
+只返回未经领域校验的文本与计时。它不是安装检查，不是必修入口，也不是单变量因果实验。
 
-| 场景 | 需要核对的结果 |
-| --- | --- |
-| 简单单规则 | 舱位、重量、件数正确 |
-| 免费托运与随身行李 | 分别进入对应数组，不跨类别复制 |
-| 信息缺失与明确零额度 | 区分 `null`、空数组、空说明和 `0` |
-| 多舱位规则 | 相同额度保留并列条件，不同额度拆分 |
-| 尺寸 | 长宽高、最大/最小值、三边之和不混淆 |
-| 无关文本 | 不臆造规则，两个数组仍存在 |
-| 超范围或歧义条件 | 明确暴露限制，不冒充普通规则；当前 Schema 不能自动检测这类错误 |
+### 固定真实评估
 
-样例需有 ID、期望结果、来源/合成标记、覆盖标签和版本。
-同源或近重复数据不要跨开发集与留出集。加入真实资料前核对使用与再分发条件，
-不要提交旅客姓名、票号、证件或联系方式。
+先完成第 03 课。6 条回归案例、默认 2 次重试，最坏请求数为 `6 × (2 + 1) = 18`：
 
-评分、基线比较、失败分母和门槛遵循[公共验收约定](../../docs/assessment.md#结构化提取评估约定)。
-非法 JSON、超时、限流等用 Mock 验证，不能混入模型准确率抬高分数。
-建议分别报告核心字段匹配、规则拆分、无依据补充、完全匹配及失败计数。
-扩展单位或英文能力时单独扩展数据和基线，不把 100 条作为进入下一模块的门槛。
-当前仍缺少独立的新留出集，超范围与歧义条件的系统覆盖也待补充；不为凑数量增加重复的简单案例。
+```powershell
+.\.venv\Scripts\python.exe -m baggage_extractor.evaluation.cli run --dataset evals\datasets\v1\holdout.jsonl --predictions-output evals\runs\candidate-predictions.jsonl --report-output evals\runs\candidate-report.json --confirm-max-requests 18
+```
 
-## 6. 必做闭环完成定义
+案例数或重试配置变化后重新计算确认值。默认拒绝覆盖输出，确需替换时加 `--overwrite`。
+已知调用/解析/校验失败保留在预测与评分分母中；运行结束不代表达到质量门槛。
+`evals/runs/` 不入库，分享证据前先检查隐私。
 
-### 学习验收
+**数据限制：** 当前 6 条开发案例和 6 条原留出案例都只是小型教学数据。
+Prompt v2 已参考原留出集失败调优，它现在只用于回归，不能作为独立质量验证。
+保留原文件名和 split 仅为兼容；新的独立验证需另外编写、复核和冻结数据。
+历史真实运行仅有过摘要，完整预测与评分报告未归档，不以历史分数宣称质量达标。
 
-进入下一模块统一按[学习推进条件](../../docs/assessment.md#学习推进与项目交付)判断。
-完成前七课的离线任务与解释即可核对前置能力；没有模型账户或 Docker 不阻塞继续学习。
-模块 03 尚未发布教程，达到前置条件不表示已有下一组可运行课程。
+## 服务化参考，不阻塞后续学习
 
-### 完整项目交付
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn baggage_extractor.api.app:app --host 127.0.0.1 --port 8000
+```
 
-以下项目与学习验收分开记录，未执行项保留“未验证”，不能用离线测试替代：
+在另一个终端检查 `http://127.0.0.1:8000/health` 与 `/ready`。
+前者表示进程可响应，后者只检查本地配置和提取器创建，不探测模型网络或额度。
+显式向 `POST /v1/extractions` 发送 `{"text":"经济舱可免费托运1件23kg行李。"}` 才会调用模型并可能计费。
 
-- [ ] 已通过学习验收，并记录验证范围和未验证项。
-- [ ] 关键覆盖矩阵有评分规则、新冻结且未用于调优的留出集、预先登记的质量门槛和失败分析；v1 原留出集仅用于教学与回归。
-- [ ] 已执行真实模型评估，归档完整逐案例预测、评分报告和版本信息，记录是否达到预先登记的门槛；运行完成不等于质量通过。
-- [ ] API 有请求、响应、错误契约及离线回归，不要求密钥才能运行程序测试。
-- [ ] 从新环境能复现安装、本地容器启动、健康检查和显式启用的真实冒烟。
-- [ ] 报告质量、延迟、可采集的 Token/费用及版本；未采集项不填 0，未验证项不冒充通过。
-- [ ] 使用[交付报告](../../templates/project-report.md)说明非模型基线、收益、失败接管与限制，并完成一次[AI 协作练习](../../docs/assessment.md#项目交付与-ai-编程协作)。
+API 包含请求 ID、稳定错误契约和单进程并发门禁；日志不记录原文。
+没有认证、分布式限流或费用熔断，不得裸露到公网。
 
-已有[交付报告](./docs/project-report.md)记录真实运行摘要，不代表上述所有项目已验收；
-模型评估完整证据尚未归档，Docker 尚未实机验证。软件测试通过不等于整体模型应用验收，更不等于生产经验。
+容器配置已提供，尚未实机验证：
 
-复盘时回答：为什么需要模型、哪些步骤应确定性执行、哪类失败最重要、
-哪次改进有固定数据证据、哪些能力仍未验证。记录使用[学习模板](../../templates/learning-log.md)，
-不在多个 README 中重复维护个人进度。
+```powershell
+docker build -t baggage-extractor:local .
+docker run --rm --env-file .env -p 127.0.0.1:8000:8000 baggage-extractor:local
+```
+
+镜像使用非 root 用户，运行时注入配置；健康检查不调用模型。
+扩展练习：运行 `pytest tests/test_api.py`，追踪 HTTP 错误如何对应提取器错误，
+再解释为什么重试创建工单还需要幂等，不能照搬只读模型请求的策略。
+
+## 项目验收
+
+- 独立完成第 02 课的提取练习，成功和失败路径均通过测试。
+- 能使用固定数据比较结果，区分程序测试、评分器校准和真实模型质量。
+- 能预测 401、429、超时和非法正文的重试次数，并用测试证明。
+- 完成迁移任务：为“合成报销规则提取”设计金额、币种、适用条件的 Schema，
+  至少提供正常、信息缺失、歧义三种输入与期望；实现本地校验测试，解释哪些事实错误仍无法自动识别。
+- 用[成果报告](../../templates/project-report.md)记录证据与未验证项。若使用 AI 编程，自行检查 diff 和测试。
+
+以上是进入第 05 课的条件，不要求模型账户、Docker 或真实质量达标。
+若宣称真实模型效果，须另附完整预测、评分、版本、事先登记的门槛与适用的数据限制；
+若宣称部署完成，须在注明的环境中实际复现。当前项目不代表生产经验。
